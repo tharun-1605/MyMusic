@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MyMusic</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_library">Library</string>
+    <string name="nav_search">Search</string>
+    <string name="nav_settings">Settings</string>
+    <style name="Theme.MyMusic" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">#0E0E10</item>
+        <item name="android:navigationBarColor">#0E0E10</item>
+    </style>
+</resources>

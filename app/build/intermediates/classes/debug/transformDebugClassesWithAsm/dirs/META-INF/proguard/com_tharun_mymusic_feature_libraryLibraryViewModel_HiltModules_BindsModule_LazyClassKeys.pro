@@ -1,0 +1,5 @@
+-keep,allowobfuscation,allowshrinking class com.tharun.mymusic.feature.equalizer.EqualizerViewModel
+-keep,allowobfuscation,allowshrinking class com.tharun.mymusic.feature.equalizer.EqualizerViewModel
+-keep,allowobfuscation,allowshrinking class com.tharun.mymusic.feature.home.HomeViewModel
+-keep,allowobfuscation,allowshrinking class com.tharun.mymusic.feature.home.HomeViewModel
+-keep,allowobfuscation,allowshrinking class com.tharun.mymusic.feature.library.LibraryViewModel

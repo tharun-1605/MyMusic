@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.tharun.mymusic.core.util.TimeUtilsTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-11-16T05:57:30" hostname="tharun" time="0.001">
+  <properties/>
+  <testcase name="formatDurationMs correctly formats milliseconds to mm ss" classname="com.tharun.mymusic.core.util.TimeUtilsTest" time="0.001"/>
+  <testcase name="parseDurationIso parses ISO 8601 strings accurately" classname="com.tharun.mymusic.core.util.TimeUtilsTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

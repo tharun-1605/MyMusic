@@ -1,0 +1,18 @@
+[
+    {
+        "merged": "com.tharun.mymusic.app-debug-74:/drawable_ic_music_note.xml.flat",
+        "source": "com.tharun.mymusic.app-main-76:/drawable/ic_music_note.xml"
+    },
+    {
+        "merged": "com.tharun.mymusic.app-debug-74:/drawable_ic_launcher_background.xml.flat",
+        "source": "com.tharun.mymusic.app-main-76:/drawable/ic_launcher_background.xml"
+    },
+    {
+        "merged": "com.tharun.mymusic.app-debug-74:/drawable_ic_launcher_foreground.xml.flat",
+        "source": "com.tharun.mymusic.app-main-76:/drawable/ic_launcher_foreground.xml"
+    },
+    {
+        "merged": "com.tharun.mymusic.app-debug-74:/xml_automotive_app_desc.xml.flat",
+        "source": "com.tharun.mymusic.app-main-76:/xml/automotive_app_desc.xml"
+    }
+]

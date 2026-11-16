@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.tharun.mymusic.feature.search.SearchViewModelTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-11-16T05:58:09" hostname="tharun" time="0.141">
+  <properties/>
+  <testcase name="filter change updates selectedFilter state" classname="com.tharun.mymusic.feature.search.SearchViewModelTest" time="0.107"/>
+  <testcase name="onSearchSubmit triggers search and saves query" classname="com.tharun.mymusic.feature.search.SearchViewModelTest" time="0.024"/>
+  <testcase name="initial recent searches are emitted" classname="com.tharun.mymusic.feature.search.SearchViewModelTest" time="0.01"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

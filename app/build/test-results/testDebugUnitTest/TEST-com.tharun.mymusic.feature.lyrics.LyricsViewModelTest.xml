@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.tharun.mymusic.feature.lyrics.LyricsViewModelTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-11-16T05:58:09" hostname="tharun" time="0.255">
+  <properties/>
+  <testcase name="seekToLine calls playbackRepository seekTo and resumes scroll" classname="com.tharun.mymusic.feature.lyrics.LyricsViewModelTest" time="0.227"/>
+  <testcase name="lyrics line is synced with current playback position" classname="com.tharun.mymusic.feature.lyrics.LyricsViewModelTest" time="0.022"/>
+  <testcase name="user scroll pauses auto-scroll and resume restores it" classname="com.tharun.mymusic.feature.lyrics.LyricsViewModelTest" time="0.005"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,219 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.tharun.mymusic"
+4    android:versionCode="1"
+5    android:versionName="1.0.0" >
+6
+7    <uses-sdk
+8        android:minSdkVersion="26"
+9        android:targetSdkVersion="35" />
+10
+11    <uses-permission android:name="android.permission.INTERNET" />
+11-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:4:5-67
+11-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:4:22-64
+12    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+12-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:5:5-79
+12-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:5:22-76
+13    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+13-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:6:5-77
+13-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:6:22-74
+14    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+14-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:7:5-92
+14-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:7:22-89
+15    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+15-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:8:5-77
+15-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:8:22-74
+16    <uses-permission android:name="android.permission.WAKE_LOCK" />
+16-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:9:5-68
+16-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:9:22-65
+17    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+17-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:10:5-80
+17-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:10:22-77
+18    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+18-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:11:5-75
+18-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:11:22-72
+19    <uses-permission
+19-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:12:5-14:38
+20        android:name="android.permission.READ_EXTERNAL_STORAGE"
+20-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:13:9-64
+21        android:maxSdkVersion="32" />
+21-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:14:9-35
+22
+23    <permission
+23-->[androidx.core:core:1.15.0] /home/tharun/.gradle/caches/8.12/transforms/baf560f6eb04b990754ba852246946c9/transformed/core-1.15.0/AndroidManifest.xml:22:5-24:47
+24        android:name="com.tharun.mymusic.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+24-->[androidx.core:core:1.15.0] /home/tharun/.gradle/caches/8.12/transforms/baf560f6eb04b990754ba852246946c9/transformed/core-1.15.0/AndroidManifest.xml:23:9-81
+25        android:protectionLevel="signature" />
+25-->[androidx.core:core:1.15.0] /home/tharun/.gradle/caches/8.12/transforms/baf560f6eb04b990754ba852246946c9/transformed/core-1.15.0/AndroidManifest.xml:24:9-44
+26
+27    <uses-permission android:name="com.tharun.mymusic.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+27-->[androidx.core:core:1.15.0] /home/tharun/.gradle/caches/8.12/transforms/baf560f6eb04b990754ba852246946c9/transformed/core-1.15.0/AndroidManifest.xml:26:5-97
+27-->[androidx.core:core:1.15.0] /home/tharun/.gradle/caches/8.12/transforms/baf560f6eb04b990754ba852246946c9/transformed/core-1.15.0/AndroidManifest.xml:26:22-94
+28
+29    <application
+29-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:16:5-54:19
+30        android:name="com.tharun.mymusic.MyMusicApp"
+30-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:17:9-35
+31        android:allowBackup="true"
+31-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:18:9-35
+32        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+32-->[androidx.core:core:1.15.0] /home/tharun/.gradle/caches/8.12/transforms/baf560f6eb04b990754ba852246946c9/transformed/core-1.15.0/AndroidManifest.xml:28:18-86
+33        android:debuggable="true"
+34        android:extractNativeLibs="false"
+35        android:icon="@drawable/ic_launcher_foreground"
+35-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:19:9-56
+36        android:label="@string/app_name"
+36-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:20:9-41
+37        android:roundIcon="@drawable/ic_launcher_foreground"
+37-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:21:9-61
+38        android:supportsRtl="true"
+38-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:22:9-35
+39        android:theme="@style/Theme.MyMusic" >
+39-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:23:9-45
+40        <activity
+40-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:25:9-34:20
+41            android:name="com.tharun.mymusic.MainActivity"
+41-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:26:13-41
+42            android:exported="true"
+42-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:27:13-36
+43            android:launchMode="singleTop"
+43-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:28:13-43
+44            android:windowSoftInputMode="adjustResize" >
+44-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:29:13-55
+45            <intent-filter>
+45-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:30:13-33:29
+46                <action android:name="android.intent.action.MAIN" />
+46-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:31:17-69
+46-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:31:25-66
+47
+48                <category android:name="android.intent.category.LAUNCHER" />
+48-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:32:17-77
+48-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:32:27-74
+49            </intent-filter>
+50        </activity>
+51
+52        <service
+52-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:36:9-45:19
+53            android:name="com.tharun.mymusic.service.MyMusicPlaybackService"
+53-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:37:13-59
+54            android:exported="true"
+54-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:38:13-36
+55            android:foregroundServiceType="mediaPlayback" >
+55-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:39:13-58
+56            <intent-filter>
+56-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:40:13-44:29
+57                <action android:name="androidx.media3.session.MediaSessionService" />
+57-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:41:17-86
+57-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:41:25-83
+58                <action android:name="androidx.media3.session.MediaLibraryService" />
+58-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:42:17-86
+58-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:42:25-83
+59                <action android:name="android.media.browse.MediaBrowserService" />
+59-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:43:17-83
+59-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:43:25-80
+60            </intent-filter>
+61        </service>
+62
+63        <meta-data
+63-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:47:9-49:59
+64            android:name="com.google.android.gms.car.application"
+64-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:48:13-66
+65            android:resource="@xml/automotive_app_desc" />
+65-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:49:13-56
+66        <meta-data
+66-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:50:9-52:58
+67            android:name="com.google.android.gms.car.notification.SmallIcon"
+67-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:51:13-77
+68            android:resource="@drawable/ic_music_note" />
+68-->/media/tharun/App/MyMusic/app/src/main/AndroidManifest.xml:52:13-55
+69
+70        <activity
+70-->[androidx.compose.ui:ui-tooling-android:1.7.6] /home/tharun/.gradle/caches/8.12/transforms/ffb037bc02950ceeb789ccd87781d108/transformed/ui-tooling-release/AndroidManifest.xml:23:9-25:39
+71            android:name="androidx.compose.ui.tooling.PreviewActivity"
+71-->[androidx.compose.ui:ui-tooling-android:1.7.6] /home/tharun/.gradle/caches/8.12/transforms/ffb037bc02950ceeb789ccd87781d108/transformed/ui-tooling-release/AndroidManifest.xml:24:13-71
+72            android:exported="true" />
+72-->[androidx.compose.ui:ui-tooling-android:1.7.6] /home/tharun/.gradle/caches/8.12/transforms/ffb037bc02950ceeb789ccd87781d108/transformed/ui-tooling-release/AndroidManifest.xml:25:13-36
+73        <activity
+73-->[androidx.compose.ui:ui-test-manifest:1.7.6] /home/tharun/.gradle/caches/8.12/transforms/58ecb7b81e82c0608f41dbd6fe20a20c/transformed/ui-test-manifest-1.7.6/AndroidManifest.xml:23:9-25:39
+74            android:name="androidx.activity.ComponentActivity"
+74-->[androidx.compose.ui:ui-test-manifest:1.7.6] /home/tharun/.gradle/caches/8.12/transforms/58ecb7b81e82c0608f41dbd6fe20a20c/transformed/ui-test-manifest-1.7.6/AndroidManifest.xml:24:13-63
+75            android:exported="true" />
+75-->[androidx.compose.ui:ui-test-manifest:1.7.6] /home/tharun/.gradle/caches/8.12/transforms/58ecb7b81e82c0608f41dbd6fe20a20c/transformed/ui-test-manifest-1.7.6/AndroidManifest.xml:25:13-36
+76
+77        <provider
+77-->[androidx.emoji2:emoji2:1.3.0] /home/tharun/.gradle/caches/8.12/transforms/25dda1b448b26fa35cf1ced8b2e43cb3/transformed/emoji2-1.3.0/AndroidManifest.xml:24:9-32:20
+78            android:name="androidx.startup.InitializationProvider"
+78-->[androidx.emoji2:emoji2:1.3.0] /home/tharun/.gradle/caches/8.12/transforms/25dda1b448b26fa35cf1ced8b2e43cb3/transformed/emoji2-1.3.0/AndroidManifest.xml:25:13-67
+79            android:authorities="com.tharun.mymusic.androidx-startup"
+79-->[androidx.emoji2:emoji2:1.3.0] /home/tharun/.gradle/caches/8.12/transforms/25dda1b448b26fa35cf1ced8b2e43cb3/transformed/emoji2-1.3.0/AndroidManifest.xml:26:13-68
+80            android:exported="false" >
+80-->[androidx.emoji2:emoji2:1.3.0] /home/tharun/.gradle/caches/8.12/transforms/25dda1b448b26fa35cf1ced8b2e43cb3/transformed/emoji2-1.3.0/AndroidManifest.xml:27:13-37
+81            <meta-data
+81-->[androidx.emoji2:emoji2:1.3.0] /home/tharun/.gradle/caches/8.12/transforms/25dda1b448b26fa35cf1ced8b2e43cb3/transformed/emoji2-1.3.0/AndroidManifest.xml:29:13-31:52
+82                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+82-->[androidx.emoji2:emoji2:1.3.0] /home/tharun/.gradle/caches/8.12/transforms/25dda1b448b26fa35cf1ced8b2e43cb3/transformed/emoji2-1.3.0/AndroidManifest.xml:30:17-75
+83                android:value="androidx.startup" />
+83-->[androidx.emoji2:emoji2:1.3.0] /home/tharun/.gradle/caches/8.12/transforms/25dda1b448b26fa35cf1ced8b2e43cb3/transformed/emoji2-1.3.0/AndroidManifest.xml:31:17-49
+84            <meta-data
+84-->[androidx.lifecycle:lifecycle-process:2.8.7] /home/tharun/.gradle/caches/8.12/transforms/8a4bb49cefa751c312af384e5a2bcabd/transformed/lifecycle-process-2.8.7/AndroidManifest.xml:29:13-31:52
+85                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+85-->[androidx.lifecycle:lifecycle-process:2.8.7] /home/tharun/.gradle/caches/8.12/transforms/8a4bb49cefa751c312af384e5a2bcabd/transformed/lifecycle-process-2.8.7/AndroidManifest.xml:30:17-78
+86                android:value="androidx.startup" />
+86-->[androidx.lifecycle:lifecycle-process:2.8.7] /home/tharun/.gradle/caches/8.12/transforms/8a4bb49cefa751c312af384e5a2bcabd/transformed/lifecycle-process-2.8.7/AndroidManifest.xml:31:17-49
+87            <meta-data
+87-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/tharun/.gradle/caches/8.12/transforms/d1f7d46c2753fe5b381ad77f9136be72/transformed/profileinstaller-1.3.1/AndroidManifest.xml:29:13-31:52
+88                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+88-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/tharun/.gradle/caches/8.12/transforms/d1f7d46c2753fe5b381ad77f9136be72/transformed/profileinstaller-1.3.1/AndroidManifest.xml:30:17-85
+89                android:value="androidx.startup" />
+89-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/tharun/.gradle/caches/8.12/transforms/d1f7d46c2753fe5b381ad77f9136be72/transformed/profileinstaller-1.3.1/AndroidManifest.xml:31:17-49
+90        </provider>
+91
+92        <service
+92-->[androidx.room:room-runtime:2.6.1] /home/tharun/.gradle/caches/8.12/transforms/904ac3dff723b29b735d15e85858988b/transformed/room-runtime-2.6.1/AndroidManifest.xml:24:9-28:63
+93            android:name="androidx.room.MultiInstanceInvalidationService"
+93-->[androidx.room:room-runtime:2.6.1] /home/tharun/.gradle/caches/8.12/transforms/904ac3dff723b29b735d15e85858988b/transformed/room-runtime-2.6.1/AndroidManifest.xml:25:13-74
+94            android:directBootAware="true"
+94-->[androidx.room:room-runtime:2.6.1] /home/tharun/.gradle/caches/8.12/transforms/904ac3dff723b29b735d15e85858988b/transformed/room-runtime-2.6.1/AndroidManifest.xml:26:13-43
+95            android:exported="false" />
+95-->[androidx.room:room-runtime:2.6.1] /home/tharun/.gradle/caches/8.12/transforms/904ac3dff723b29b735d15e85858988b/transformed/room-runtime-2.6.1/AndroidManifest.xml:27:13-37
+96
+97        <receiver
+97-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/tharun/.gradle/caches/8.12/transforms/d1f7d46c2753fe5b381ad77f9136be72/transformed/profileinstaller-1.3.1/AndroidManifest.xml:34:9-52:20
+98            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+98-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/tharun/.gradle/caches/8.12/transforms/d1f7d46c2753fe5b381ad77f9136be72/transformed/profileinstaller-1.3.1/AndroidManifest.xml:35:13-76
+99            android:directBootAware="false"
+99-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/tharun/.gradle/caches/8.12/transforms/d1f7d46c2753fe5b381ad77f9136be72/transformed/profileinstaller-1.3.1/AndroidManifest.xml:36:13-44
+100            android:enabled="true"
+100-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/tharun/.gradle/caches/8.12/transforms/d1f7d46c2753fe5b381ad77f9136be72/transformed/profileinstaller-1.3.1/AndroidManifest.xml:37:13-35
+101            android:exported="true"
+101-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/tharun/.gradle/caches/8.12/transforms/d1f7d46c2753fe5b381ad77f9136be72/transformed/profileinstaller-1.3.1/AndroidManifest.xml:38:13-36
+102            android:permission="android.permission.DUMP" >
+102-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/tharun/.gradle/caches/8.12/transforms/d1f7d46c2753fe5b381ad77f9136be72/transformed/profileinstaller-1.3.1/AndroidManifest.xml:39:13-57
+103            <intent-filter>
+103-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/tharun/.gradle/caches/8.12/transforms/d1f7d46c2753fe5b381ad77f9136be72/transformed/profileinstaller-1.3.1/AndroidManifest.xml:40:13-42:29
+104                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+104-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/tharun/.gradle/caches/8.12/transforms/d1f7d46c2753fe5b381ad77f9136be72/transformed/profileinstaller-1.3.1/AndroidManifest.xml:41:17-91
+104-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/tharun/.gradle/caches/8.12/transforms/d1f7d46c2753fe5b381ad77f9136be72/transformed/profileinstaller-1.3.1/AndroidManifest.xml:41:25-88
+105            </intent-filter>
+106            <intent-filter>
+106-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/tharun/.gradle/caches/8.12/transforms/d1f7d46c2753fe5b381ad77f9136be72/transformed/profileinstaller-1.3.1/AndroidManifest.xml:43:13-45:29
+107                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+107-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/tharun/.gradle/caches/8.12/transforms/d1f7d46c2753fe5b381ad77f9136be72/transformed/profileinstaller-1.3.1/AndroidManifest.xml:44:17-85
+107-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/tharun/.gradle/caches/8.12/transforms/d1f7d46c2753fe5b381ad77f9136be72/transformed/profileinstaller-1.3.1/AndroidManifest.xml:44:25-82
+108            </intent-filter>
+109            <intent-filter>
+109-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/tharun/.gradle/caches/8.12/transforms/d1f7d46c2753fe5b381ad77f9136be72/transformed/profileinstaller-1.3.1/AndroidManifest.xml:46:13-48:29
+110                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+110-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/tharun/.gradle/caches/8.12/transforms/d1f7d46c2753fe5b381ad77f9136be72/transformed/profileinstaller-1.3.1/AndroidManifest.xml:47:17-88
+110-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/tharun/.gradle/caches/8.12/transforms/d1f7d46c2753fe5b381ad77f9136be72/transformed/profileinstaller-1.3.1/AndroidManifest.xml:47:25-85
+111            </intent-filter>
+112            <intent-filter>
+112-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/tharun/.gradle/caches/8.12/transforms/d1f7d46c2753fe5b381ad77f9136be72/transformed/profileinstaller-1.3.1/AndroidManifest.xml:49:13-51:29
+113                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+113-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/tharun/.gradle/caches/8.12/transforms/d1f7d46c2753fe5b381ad77f9136be72/transformed/profileinstaller-1.3.1/AndroidManifest.xml:50:17-95
+113-->[androidx.profileinstaller:profileinstaller:1.3.1] /home/tharun/.gradle/caches/8.12/transforms/d1f7d46c2753fe5b381ad77f9136be72/transformed/profileinstaller-1.3.1/AndroidManifest.xml:50:25-92
+114            </intent-filter>
+115        </receiver>
+116    </application>
+117
+118</manifest>

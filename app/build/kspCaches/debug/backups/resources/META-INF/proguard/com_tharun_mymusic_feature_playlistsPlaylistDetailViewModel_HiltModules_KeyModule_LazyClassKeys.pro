@@ -1,0 +1,12 @@
+-keep,allowobfuscation,allowshrinking class com.tharun.mymusic.feature.equalizer.EqualizerViewModel
+-keep,allowobfuscation,allowshrinking class com.tharun.mymusic.feature.equalizer.EqualizerViewModel
+-keep,allowobfuscation,allowshrinking class com.tharun.mymusic.feature.home.HomeViewModel
+-keep,allowobfuscation,allowshrinking class com.tharun.mymusic.feature.home.HomeViewModel
+-keep,allowobfuscation,allowshrinking class com.tharun.mymusic.feature.library.LibraryViewModel
+-keep,allowobfuscation,allowshrinking class com.tharun.mymusic.feature.library.LibraryViewModel
+-keep,allowobfuscation,allowshrinking class com.tharun.mymusic.feature.lyrics.LyricsViewModel
+-keep,allowobfuscation,allowshrinking class com.tharun.mymusic.feature.lyrics.LyricsViewModel
+-keep,allowobfuscation,allowshrinking class com.tharun.mymusic.feature.player.PlayerViewModel
+-keep,allowobfuscation,allowshrinking class com.tharun.mymusic.feature.player.PlayerViewModel
+-keep,allowobfuscation,allowshrinking class com.tharun.mymusic.feature.playlists.PlaylistDetailViewModel
+-keep,allowobfuscation,allowshrinking class com.tharun.mymusic.feature.playlists.PlaylistDetailViewModel
