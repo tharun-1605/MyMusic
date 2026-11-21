@@ -34,6 +34,7 @@ import com.tharun.mymusic.data.local.dao.SongDao
 import com.tharun.mymusic.data.local.entity.RecentlyPlayedEntity
 import com.tharun.mymusic.data.local.preferences.UserPreferencesDataStore
 import com.tharun.mymusic.data.remote.sample.SamplePermittedCatalog
+import com.tharun.mymusic.data.remote.stream.YouTubeStreamResolver
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -55,6 +56,7 @@ class MyMusicPlaybackService : MediaLibraryService() {
     @Inject lateinit var playlistDao: PlaylistDao
     @Inject lateinit var recentlyPlayedDao: RecentlyPlayedDao
     @Inject lateinit var okHttpClient: OkHttpClient
+    @Inject lateinit var streamResolver: YouTubeStreamResolver
 
     private var mediaLibrarySession: MediaLibrarySession? = null
     private lateinit var player: ExoPlayer
@@ -67,8 +69,7 @@ class MyMusicPlaybackService : MediaLibraryService() {
         const val FOLDER_PLAYLISTS = "folder_playlists"
         const val FOLDER_RECENT = "folder_recent"
         const val FOLDER_DISCOVER = "folder_discover"
-        private const val DEFAULT_FALLBACK_AUDIO =
-            "https://upload.wikimedia.org/wikipedia/commons/2/23/Clair_de_lune_%28Suite_Bergamasque%29.ogg"
+        private const val DEFAULT_FALLBACK_AUDIO = SamplePermittedCatalog.DEFAULT_FALLBACK_AUDIO
     }
 
     @OptIn(UnstableApi::class)
@@ -337,16 +338,16 @@ class MyMusicPlaybackService : MediaLibraryService() {
                 ?: item.localConfiguration?.uri
 
             val finalUri: Uri = when {
-                requestedUri != null && requestedUri.toString().isNotBlank() -> requestedUri
+                requestedUri != null && requestedUri.toString().isNotBlank() &&
+                        (requestedUri.toString().startsWith("http") || requestedUri.toString().startsWith("content") || requestedUri.toString().startsWith("file")) -> requestedUri
+                item.mediaId.startsWith("yt_") -> {
+                    val vId = item.mediaId.removePrefix("yt_")
+                    val stream = streamResolver.getOrResolveStreamSync(vId)
+                    Uri.parse(stream)
+                }
                 else -> {
-                    val sample = SamplePermittedCatalog.sampleSongs.find { it.id == item.mediaId }
-                    if (sample?.mediaUri != null) {
-                        Uri.parse(sample.mediaUri)
-                    } else {
-                        val catalog = SamplePermittedCatalog.sampleSongs
-                        val fallback = catalog[abs(item.mediaId.hashCode()) % catalog.size].mediaUri
-                        Uri.parse(fallback ?: DEFAULT_FALLBACK_AUDIO)
-                    }
+                    val stream = SamplePermittedCatalog.getAudioStreamForId(item.mediaId)
+                    Uri.parse(stream)
                 }
             }
 

@@ -65,9 +65,12 @@ class YouTubeMusicInnerTubeClient @Inject constructor(
 
     suspend fun getTrending(): List<Song> = withContext(dispatchers.io) {
         try {
-            val res = search("Trending Music Hits 2026")
+            val res = search("Top Music Hits")
             res.songs.ifEmpty {
-                search("Top Hits").songs
+                val res2 = search("Trending Music Hits 2026")
+                res2.songs.ifEmpty {
+                    search("Popular Music Hits").songs
+                }
             }
         } catch (e: Exception) {
             emptyList()

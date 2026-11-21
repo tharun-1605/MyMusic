@@ -12,6 +12,7 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.tharun.mymusic.core.dispatchers.DispatcherProvider
+import com.tharun.mymusic.data.remote.sample.SamplePermittedCatalog
 import com.tharun.mymusic.data.remote.stream.YouTubeStreamResolver
 import com.tharun.mymusic.domain.model.AudioSourceProvider
 import com.tharun.mymusic.domain.model.PlaybackState
@@ -44,6 +45,7 @@ class PlaybackRepositoryImpl @Inject constructor(
     private val repositoryScope = CoroutineScope(dispatchers.main + Job())
     private var controller: MediaController? = null
     private var positionUpdateJob: Job? = null
+    private var queuePreloadJob: Job? = null
     private var pendingPlayRequest: (() -> Unit)? = null
 
     private val _playbackState = MutableStateFlow(PlaybackState())
@@ -98,6 +100,34 @@ class PlaybackRepositoryImpl @Inject constructor(
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                val idx = controller?.currentMediaItemIndex ?: -1
+                if (idx in 0 until activeQueueSongs.size) {
+                    val s = activeQueueSongs[idx]
+                    val vId = s.youtubeVideoId?.takeIf { it.isNotBlank() }
+                        ?: if (s.id.startsWith("yt_")) s.id.removePrefix("yt_") else null
+
+                    // If the current transitioning song needs its respective direct stream resolved
+                    if (!vId.isNullOrBlank() && s.mediaUri?.contains("googlevideo.com") != true) {
+                        repositoryScope.launch(dispatchers.io) {
+                            val realStream = streamResolver.resolveAudioStream(vId)
+                            if (realStream.isNotBlank() && realStream != s.mediaUri) {
+                                val updatedSong = s.copy(mediaUri = realStream, isPlayable = true)
+                                activeQueueSongs[idx] = updatedSong
+                                withContext(dispatchers.main) {
+                                    val ctrl = controller
+                                    if (ctrl != null && ctrl.currentMediaItemIndex == idx) {
+                                        val pos = ctrl.currentPosition
+                                        val wasPlaying = ctrl.isPlaying
+                                        ctrl.replaceMediaItem(idx, updatedSong.toMediaItem())
+                                        ctrl.seekTo(idx, pos)
+                                        if (wasPlaying) ctrl.play()
+                                    }
+                                    syncStateFromController()
+                                }
+                            }
+                        }
+                    }
+                }
                 syncStateFromController()
             }
 
@@ -201,62 +231,88 @@ class PlaybackRepositoryImpl @Inject constructor(
             return
         }
 
+        queuePreloadJob?.cancel()
         repositoryScope.launch(dispatchers.io) {
             val resolvedSongs = songs.toMutableList()
-            val target = resolvedSongs[safeIndex]
 
-            // Resolve target stream immediately
-            if (target.mediaUri.isNullOrBlank() && !target.youtubeVideoId.isNullOrBlank()) {
-                val streamUrl = streamResolver.resolveAudioStream(target.youtubeVideoId)
-                if (streamUrl != null) {
-                    resolvedSongs[safeIndex] = target.copy(mediaUri = streamUrl, isPlayable = true)
-                }
-            } else if (target.mediaUri.isNullOrBlank()) {
-                // Ensure mediaUri is never blank
-                resolvedSongs[safeIndex] = target.copy(
-                    mediaUri = "https://upload.wikimedia.org/wikipedia/commons/2/23/Clair_de_lune_%28Suite_Bergamasque%29.ogg",
-                    isPlayable = true
-                )
+            // 1. Resolve clicked target song's REAL audio stream first
+            val targetVideoId = targetSong.youtubeVideoId?.takeIf { it.isNotBlank() }
+                ?: if (targetSong.id.startsWith("yt_")) targetSong.id.removePrefix("yt_") else null
+
+            val targetStreamUrl = if (!targetVideoId.isNullOrBlank()) {
+                streamResolver.resolveAudioStream(targetVideoId)
+            } else {
+                targetSong.mediaUri?.takeIf { it.isNotBlank() }
+                    ?: streamResolver.getQuickAudioStream(targetSong.id)
             }
 
+            resolvedSongs[safeIndex] = targetSong.copy(
+                mediaUri = targetStreamUrl,
+                isPlayable = true
+            )
+
+            // 2. Ensure each other queue item has a non-empty URI so MediaItem validation passes
+            for (i in resolvedSongs.indices) {
+                if (i == safeIndex) continue
+                val s = resolvedSongs[i]
+                if (s.mediaUri.isNullOrBlank()) {
+                    val vId = s.youtubeVideoId?.takeIf { it.isNotBlank() }
+                        ?: if (s.id.startsWith("yt_")) s.id.removePrefix("yt_") else null
+                    val cached = vId?.let { streamResolver.getCachedStream(it) }
+                    val streamUri = cached ?: if (s.id.startsWith("sample_")) {
+                        SamplePermittedCatalog.getAudioStreamForId(s.id)
+                    } else {
+                        streamResolver.getQuickAudioStream(vId ?: s.id)
+  .l///l                  }
+                    resolvedSongs[i] = s.copy(mediaUri = streamUri, isPlayable = true)
+                }
+            }
+
+            // 3. Immediately start playing the target song on the main thread
             withContext(dispatchers.main) {
                 activeQueueSongs.clear()
                 activeQueueSongs.addAll(resolvedSongs)
 
                 val c = controller ?: return@withContext
-                val playable = resolvedSongs.filter { !it.mediaUri.isNullOrBlank() }
-                if (playable.isNotEmpty()) {
-                    val playIndex = playable.indexOfFirst { it.id == target.id }.coerceAtLeast(0)
-                    val mediaItems = playable.map { it.toMediaItem() }
-                    try {
-                        c.setMediaItems(mediaItems, playIndex, 0L)
-                        c.prepare()
-                        c.play()
-                        syncStateFromController()
-                    } catch (e: Throwable) {
-                        Log.e("PlaybackRepository", "Failed to start playback on controller", e)
-                        _playbackState.update { it.copy(isBuffering = false) }
-                    }
-                } else {
+                val mediaItems = resolvedSongs.map { it.toMediaItem() }
+                try {
+                    c.setMediaItems(mediaItems, safeIndex, 0L)
+                    c.prepare()
+                    c.play()
+                    syncStateFromController()
+                } catch (e: Throwable) {
+                    Log.e("PlaybackRepository", "Failed to start playback on controller", e)
                     _playbackState.update { it.copy(isBuffering = false) }
                 }
             }
 
-            // Pre-resolve surrounding songs in queue
-            for (i in resolvedSongs.indices) {
-                if (i != safeIndex && resolvedSongs[i].mediaUri.isNullOrBlank() && !resolvedSongs[i].youtubeVideoId.isNullOrBlank()) {
-                    try {
-                        val url = streamResolver.resolveAudioStream(resolvedSongs[i].youtubeVideoId!!)
-                        if (url != null) {
-                            resolvedSongs[i] = resolvedSongs[i].copy(mediaUri = url, isPlayable = true)
-                        }
-                    } catch (_: Throwable) {}
-                }
-            }
-            withContext(dispatchers.main) {
-                activeQueueSongs.clear()
-                activeQueueSongs.addAll(resolvedSongs)
-                syncStateFromController()
+            // 4. Background queue preloader: asynchronously resolve upcoming tracks
+            // so every song in the queue has its own real respective audio stream!
+            queuePreloadJob = launch(dispatchers.io) {
+                val order = (safeIndex + 1 until resolvedSongs.size) + (0 until safeIndex)
+                for (idx in order) {
+                    if (!isActive) break
+                    val s = resolvedSongs.getOrNull(idx) ?: continue
+                    val vId = s.youtubeVideoId?.takeIf { it.isNotBlank() }
+                        ?: if (s.id.startsWith("yt_")) s.id.removePrefix("yt_") else null
+
+                    if (!vId.isNullOrBlank() && s.mediaUri?.contains("googlevideo.com") != true) {
+                        try {
+                            val resolved = streamResolver.resolveAudioStream(vId)
+                            if (resolved.isNotBlank() && resolved != s.mediaUri) {
+                                resolvedSongs[idx] = s.copy(mediaUri = resolved, isPlayable = true)
+                                withContext(dispatchers.main) {
+                                    activeQueueSongs.clear()
+                                    activeQueueSongs.addAll(resolvedSongs)
+                                    val ctrl = controller
+                                    if (ctrl != null && idx < ctrl.mediaItemCount && idx != ctrl.currentMediaItemIndex) {
+                                        ctrl.replaceMediaItem(idx, resolvedSongs[idx].toMediaItem())
+                                    }
+                                }
+                            }
+                        } catch (_: Throwable) {}
+                    }
+b/                }
             }
         }
     }

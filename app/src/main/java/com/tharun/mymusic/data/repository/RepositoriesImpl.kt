@@ -337,9 +337,9 @@ class MusicDiscoveryRepositoryImpl @Inject constructor(
             // 3. Search YouTube Data API if configured
             val ytResults = youTubeDiscoveryProvider.search(q)
 
-            val combinedSongs = (localSongs + sampleResults.songs + ytResults.songs).distinctBy { it.id }
-            val combinedArtists = (sampleResults.artists + ytResults.artists).distinctBy { it.name }
-            val combinedAlbums = (sampleResults.albums + ytResults.albums).distinctBy { it.title }
+            val combinedSongs = (ytResults.songs + localSongs + sampleResults.songs).distinctBy { it.id }
+            val combinedArtists = (ytResults.artists + sampleResults.artists).distinctBy { it.name }
+            val combinedAlbums = (ytResults.albums + sampleResults.albums).distinctBy { it.title }
 
             emit(
                 Resource.Success(
@@ -361,7 +361,11 @@ class MusicDiscoveryRepositoryImpl @Inject constructor(
         try {
             val ytTrending = youTubeDiscoveryProvider.getTrending()
             val sampleTrending = sampleDiscoveryProvider.getTrending()
-            val combined = (sampleTrending + ytTrending).distinctBy { it.id }
+            val combined = if (ytTrending.isNotEmpty()) {
+                (ytTrending + sampleTrending).distinctBy { it.id }
+            } else {
+                sampleTrending
+            }
             emit(Resource.Success(combined))
         } catch (e: Exception) {
             emit(Resource.Success(sampleDiscoveryProvider.getTrending()))
