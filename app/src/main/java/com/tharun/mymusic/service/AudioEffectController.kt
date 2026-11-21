@@ -32,22 +32,39 @@ class AudioEffectController @Inject constructor() {
             equalizer = Equalizer(0, audioSessionId).apply {
                 enabled = config.isEnabled
             }
+        } catch (e: Exception) {
+            Log.w("AudioEffectController", "Equalizer not supported on session $audioSessionId: ${e.message}")
+            equalizer = null
+        }
+
+        try {
             bassBoost = BassBoost(0, audioSessionId).apply {
                 enabled = config.isEnabled
                 if (strengthSupported) {
                     setStrength(config.bassBoostLevel.toShort())
                 }
             }
+        } catch (e: Exception) {
+            Log.w("AudioEffectController", "BassBoost not supported: ${e.message}")
+            bassBoost = null
+        }
+
+        try {
             virtualizer = Virtualizer(0, audioSessionId).apply {
                 enabled = config.isEnabled
                 if (strengthSupported) {
                     setStrength(config.virtualizerLevel.toShort())
                 }
             }
+        } catch (e: Exception) {
+            Log.w("AudioEffectController", "Virtualizer not supported: ${e.message}")
+            virtualizer = null
+        }
+
+        try {
             applyConfig(config)
         } catch (e: Exception) {
-            Log.e("AudioEffectController", "Failed to initialize audio effects on session $audioSessionId", e)
-            release()
+            Log.w("AudioEffectController", "Error applying config on session $audioSessionId: ${e.message}")
         }
     }
 
@@ -114,20 +131,24 @@ class AudioEffectController @Inject constructor() {
 
     fun getBands(): List<EqualizerBand> {
         val eq = equalizer ?: return emptyList()
-        val range = eq.bandLevelRange
-        val minDb = range[0] / 100f
-        val maxDb = range[1] / 100f
+        return try {
+            val range = eq.bandLevelRange
+            val minDb = range[0] / 100f
+            val maxDb = range[1] / 100f
 
-        return (0 until eq.numberOfBands).map { bandIndex ->
-            val centerFreq = eq.getCenterFreq(bandIndex.toShort()) / 1000
-            val gainDb = eq.getBandLevel(bandIndex.toShort()) / 100f
-            EqualizerBand(
-                index = bandIndex,
-                centerFreqHz = centerFreq,
-                gainDb = gainDb,
-                minDb = minDb,
-                maxDb = maxDb
-            )
+            (0 until eq.numberOfBands).map { bandIndex ->
+                val centerFreq = eq.getCenterFreq(bandIndex.toShort()) / 1000
+                val gainDb = eq.getBandLevel(bandIndex.toShort()) / 100f
+                EqualizerBand(
+                    index = bandIndex,
+                    centerFreqHz = centerFreq,
+                    gainDb = gainDb,
+                    minDb = minDb,
+                    maxDb = maxDb
+                )
+            }
+        } catch (_: Exception) {
+            emptyList()
         }
     }
 

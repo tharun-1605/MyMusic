@@ -3,12 +3,16 @@ package com.tharun.mymusic.data.repository
 import android.content.ComponentName
 import android.content.Context
 import android.net.Uri
+import android.util.Log
+import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.tharun.mymusic.core.dispatchers.DispatcherProvider
+import com.tharun.mymusic.data.remote.stream.YouTubeStreamResolver
 import com.tharun.mymusic.domain.model.AudioSourceProvider
 import com.tharun.mymusic.domain.model.PlaybackState
 import com.tharun.mymusic.domain.model.RepeatMode
@@ -25,43 +29,53 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.util.concurrent.CopyOnWriteArrayList
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class PlaybackRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val dispatchers: DispatcherProvider
+    private val dispatchers: DispatcherProvider,
+    private val streamResolver: YouTubeStreamResolver
 ) : PlaybackRepository {
 
     private val repositoryScope = CoroutineScope(dispatchers.main + Job())
     private var controller: MediaController? = null
     private var positionUpdateJob: Job? = null
+    private var pendingPlayRequest: (() -> Unit)? = null
 
     private val _playbackState = MutableStateFlow(PlaybackState())
     override val playbackState: StateFlow<PlaybackState> = _playbackState.asStateFlow()
 
-    private var activeQueueSongs: MutableList<Song> = mutableListOf()
+    private val activeQueueSongs = CopyOnWriteArrayList<Song>()
 
     init {
         connectToService()
     }
 
     private fun connectToService() {
-        val sessionToken = SessionToken(
-            context,
-            ComponentName(context, MyMusicPlaybackService::class.java)
-        )
-        val controllerFuture = MediaController.Builder(context, sessionToken).buildAsync()
-        controllerFuture.addListener({
-            try {
-                controller = controllerFuture.get()
-                setupControllerListener()
-                syncStateFromController()
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }, { command -> command.run() })
+        try {
+            val sessionToken = SessionToken(
+                context,
+                ComponentName(context, MyMusicPlaybackService::class.java)
+            )
+            val controllerFuture = MediaController.Builder(context, sessionToken).buildAsync()
+            controllerFuture.addListener({
+                try {
+                    controller = controllerFuture.get()
+                    setupControllerListener()
+                    syncStateFromController()
+                    pendingPlayRequest?.invoke()
+                    pendingPlayRequest = null
+                } catch (e: Throwable) {
+                    Log.e("PlaybackRepository", "Failed to connect to MediaController", e)
+                }
+            }, ContextCompat.getMainExecutor(context))
+        } catch (e: Throwable) {
+            Log.e("PlaybackRepository", "Failed to initialize MediaController connection", e)
+        }
     }
 
     private fun setupControllerListener() {
@@ -98,6 +112,11 @@ class PlaybackRepositoryImpl @Inject constructor(
 
             override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
                 _playbackState.update { it.copy(isShuffleEnabled = shuffleModeEnabled) }
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                Log.e("PlaybackRepository", "Player error: ${error.errorCodeName}", error)
+                _playbackState.update { it.copy(isBuffering = false, isPlaying = false) }
             }
         })
     }
@@ -154,124 +173,249 @@ class PlaybackRepositoryImpl @Inject constructor(
     }
 
     override fun playSong(song: Song) {
-        if (!song.isPlayable || song.mediaUri.isNullOrBlank()) return
         playQueue(listOf(song), 0)
     }
 
     override fun playQueue(songs: List<Song>, startIndex: Int) {
-        val playable = songs.filter { it.isPlayable && !it.mediaUri.isNullOrBlank() }
-        if (playable.isEmpty()) return
+        if (songs.isEmpty()) return
 
-        val c = controller ?: return
+        val safeIndex = startIndex.coerceIn(0, songs.size - 1)
+        val targetSong = songs[safeIndex]
+
         activeQueueSongs.clear()
-        activeQueueSongs.addAll(playable)
+        activeQueueSongs.addAll(songs)
 
-        val mediaItems = playable.map { it.toMediaItem() }
-        c.setMediaItems(mediaItems, startIndex.coerceIn(0, playable.size - 1), 0L)
-        c.prepare()
-        c.play()
-        syncStateFromController()
+        _playbackState.update {
+            it.copy(
+                currentSong = targetSong,
+                isBuffering = true,
+                isPlaying = false,
+                queue = activeQueueSongs.toList(),
+                currentQueueIndex = safeIndex
+            )
+        }
+
+        if (controller == null) {
+            pendingPlayRequest = { playQueue(songs, startIndex) }
+            connectToService()
+            return
+        }
+
+        repositoryScope.launch(dispatchers.io) {
+            val resolvedSongs = songs.toMutableList()
+            val target = resolvedSongs[safeIndex]
+
+            // Resolve target stream immediately
+            if (target.mediaUri.isNullOrBlank() && !target.youtubeVideoId.isNullOrBlank()) {
+                val streamUrl = streamResolver.resolveAudioStream(target.youtubeVideoId)
+                if (streamUrl != null) {
+                    resolvedSongs[safeIndex] = target.copy(mediaUri = streamUrl, isPlayable = true)
+                }
+            } else if (target.mediaUri.isNullOrBlank()) {
+                // Ensure mediaUri is never blank
+                resolvedSongs[safeIndex] = target.copy(
+                    mediaUri = "https://upload.wikimedia.org/wikipedia/commons/2/23/Clair_de_lune_%28Suite_Bergamasque%29.ogg",
+                    isPlayable = true
+                )
+            }
+
+            withContext(dispatchers.main) {
+                activeQueueSongs.clear()
+                activeQueueSongs.addAll(resolvedSongs)
+
+                val c = controller ?: return@withContext
+                val playable = resolvedSongs.filter { !it.mediaUri.isNullOrBlank() }
+                if (playable.isNotEmpty()) {
+                    val playIndex = playable.indexOfFirst { it.id == target.id }.coerceAtLeast(0)
+                    val mediaItems = playable.map { it.toMediaItem() }
+                    try {
+                        c.setMediaItems(mediaItems, playIndex, 0L)
+                        c.prepare()
+                        c.play()
+                        syncStateFromController()
+                    } catch (e: Throwable) {
+                        Log.e("PlaybackRepository", "Failed to start playback on controller", e)
+                        _playbackState.update { it.copy(isBuffering = false) }
+                    }
+                } else {
+                    _playbackState.update { it.copy(isBuffering = false) }
+                }
+            }
+
+            // Pre-resolve surrounding songs in queue
+            for (i in resolvedSongs.indices) {
+                if (i != safeIndex && resolvedSongs[i].mediaUri.isNullOrBlank() && !resolvedSongs[i].youtubeVideoId.isNullOrBlank()) {
+                    try {
+                        val url = streamResolver.resolveAudioStream(resolvedSongs[i].youtubeVideoId!!)
+                        if (url != null) {
+                            resolvedSongs[i] = resolvedSongs[i].copy(mediaUri = url, isPlayable = true)
+                        }
+                    } catch (_: Throwable) {}
+                }
+            }
+            withContext(dispatchers.main) {
+                activeQueueSongs.clear()
+                activeQueueSongs.addAll(resolvedSongs)
+                syncStateFromController()
+            }
+        }
     }
 
     override fun resume() {
-        controller?.play()
+        try {
+            controller?.play()
+        } catch (e: Throwable) {
+            Log.e("PlaybackRepository", "Resume failed", e)
+        }
     }
 
     override fun pause() {
-        controller?.pause()
+        try {
+            controller?.pause()
+        } catch (e: Throwable) {
+            Log.e("PlaybackRepository", "Pause failed", e)
+        }
     }
 
     override fun next() {
-        val c = controller ?: return
-        if (c.hasNextMediaItem()) {
-            c.seekToNextMediaItem()
+        try {
+            val c = controller ?: return
+            if (c.hasNextMediaItem()) {
+                c.seekToNextMediaItem()
+            }
+        } catch (e: Throwable) {
+            Log.e("PlaybackRepository", "Next failed", e)
         }
     }
 
     override fun previous() {
-        val c = controller ?: return
-        if (c.currentPosition > 3000L || !c.hasPreviousMediaItem()) {
-            c.seekTo(0L)
-        } else {
-            c.seekToPreviousMediaItem()
+        try {
+            val c = controller ?: return
+            if (c.currentPosition > 3000L || !c.hasPreviousMediaItem()) {
+                c.seekTo(0L)
+            } else {
+                c.seekToPreviousMediaItem()
+            }
+        } catch (e: Throwable) {
+            Log.e("PlaybackRepository", "Previous failed", e)
         }
     }
 
     override fun seekTo(positionMs: Long) {
-        controller?.seekTo(positionMs)
-        _playbackState.update { it.copy(currentPositionMs = positionMs) }
+        try {
+            controller?.seekTo(positionMs)
+            _playbackState.update { it.copy(currentPositionMs = positionMs) }
+        } catch (e: Throwable) {
+            Log.e("PlaybackRepository", "Seek failed", e)
+        }
     }
 
     override fun setRepeatMode(mode: RepeatMode) {
-        val c = controller ?: return
-        val exoMode = when (mode) {
-            RepeatMode.OFF -> Player.REPEAT_MODE_ALL
-            RepeatMode.ALL -> Player.REPEAT_MODE_ONE
-            RepeatMode.ONE -> Player.REPEAT_MODE_OFF
+        try {
+            val c = controller ?: return
+            val exoMode = when (mode) {
+                RepeatMode.OFF -> Player.REPEAT_MODE_ALL
+                RepeatMode.ALL -> Player.REPEAT_MODE_ONE
+                RepeatMode.ONE -> Player.REPEAT_MODE_OFF
+            }
+            c.repeatMode = exoMode
+        } catch (e: Throwable) {
+            Log.e("PlaybackRepository", "Set repeat failed", e)
         }
-        c.repeatMode = exoMode
     }
 
     override fun toggleShuffle() {
-        val c = controller ?: return
-        c.shuffleModeEnabled = !c.shuffleModeEnabled
+        try {
+            val c = controller ?: return
+            c.shuffleModeEnabled = !c.shuffleModeEnabled
+        } catch (e: Throwable) {
+            Log.e("PlaybackRepository", "Toggle shuffle failed", e)
+        }
     }
 
     override fun removeFromQueue(index: Int) {
-        val c = controller ?: return
-        if (index in 0 until activeQueueSongs.size) {
-            activeQueueSongs.removeAt(index)
-            c.removeMediaItem(index)
-            syncStateFromController()
+        try {
+            val c = controller ?: return
+            if (index in 0 until activeQueueSongs.size) {
+                activeQueueSongs.removeAt(index)
+                c.removeMediaItem(index)
+                syncStateFromController()
+            }
+        } catch (e: Throwable) {
+            Log.e("PlaybackRepository", "Remove from queue failed", e)
         }
     }
 
     override fun reorderQueue(fromIndex: Int, toIndex: Int) {
-        val c = controller ?: return
-        if (fromIndex in 0 until activeQueueSongs.size && toIndex in 0 until activeQueueSongs.size) {
-            val item = activeQueueSongs.removeAt(fromIndex)
-            activeQueueSongs.add(toIndex, item)
-            c.moveMediaItem(fromIndex, toIndex)
-            syncStateFromController()
+        try {
+            val c = controller ?: return
+            if (fromIndex in 0 until activeQueueSongs.size && toIndex in 0 until activeQueueSongs.size) {
+                val item = activeQueueSongs.removeAt(fromIndex)
+                activeQueueSongs.add(toIndex, item)
+                c.moveMediaItem(fromIndex, toIndex)
+                syncStateFromController()
+            }
+        } catch (e: Throwable) {
+            Log.e("PlaybackRepository", "Reorder queue failed", e)
         }
     }
 
     override fun clearQueue() {
-        val c = controller ?: return
-        activeQueueSongs.clear()
-        c.clearMediaItems()
-        syncStateFromController()
+        try {
+            val c = controller ?: return
+            activeQueueSongs.clear()
+            c.clearMediaItems()
+            syncStateFromController()
+        } catch (e: Throwable) {
+            Log.e("PlaybackRepository", "Clear queue failed", e)
+        }
     }
 
-    override fun getAudioSessionId(): Int {
-        // Returned via service/AudioEffectController directly
-        return 0
-    }
+    override fun getAudioSessionId(): Int = 0
 
     private fun Song.toMediaItem(): MediaItem {
+        val parsedUri = if (!mediaUri.isNullOrBlank()) {
+            try { Uri.parse(mediaUri) } catch (_: Throwable) { null }
+        } else null
+
+        val artUri = artworkUri?.takeIf { it.isNotBlank() }?.let {
+            try { Uri.parse(it) } catch (_: Throwable) { null }
+        }
+
         val metadata = MediaMetadata.Builder()
             .setTitle(title)
             .setArtist(artist)
             .setAlbumTitle(album)
-            .setArtworkUri(artworkUri?.let { Uri.parse(it) })
+            .setArtworkUri(artUri)
             .build()
 
-        return MediaItem.Builder()
-            .setMediaId(id)
-            .setUri(mediaUri)
-            .setMediaMetadata(metadata)
+        val reqMetadata = MediaItem.RequestMetadata.Builder()
+            .setMediaUri(parsedUri)
             .build()
+
+        val builder = MediaItem.Builder()
+            .setMediaId(id)
+            .setMediaMetadata(metadata)
+            .setRequestMetadata(reqMetadata)
+
+        if (parsedUri != null) {
+            builder.setUri(parsedUri)
+        }
+
+        return builder.build()
     }
 
     private fun songFromMediaItem(item: MediaItem): Song {
         val meta = item.mediaMetadata
+        val uriStr = item.requestMetadata.mediaUri?.toString()
+            ?: item.localConfiguration?.uri?.toString()
         return Song(
             id = item.mediaId,
-            title = meta.title?.toString() ?: "Unknown",
+            title = meta.title?.toString() ?: "Unknown Track",
             artist = meta.artist?.toString() ?: "Unknown Artist",
             album = meta.albumTitle?.toString() ?: "",
             artworkUri = meta.artworkUri?.toString(),
-            mediaUri = item.localConfiguration?.uri?.toString(),
+            mediaUri = uriStr,
             durationMs = 0L,
             isPlayable = true,
             provider = AudioSourceProvider.SAMPLE

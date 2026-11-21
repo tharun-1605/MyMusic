@@ -66,14 +66,21 @@
 
 ---
 
-## ⚖️ Integration & Legal Compliance Rules
+## 🚀 SimpMusic-Inspired Architecture & Zero-API-Key Streaming
 
-In strict adherence to product requirements and YouTube Terms of Service:
-- **Separation of Metadata and Playback**: YouTube Data API v3 is used strictly for search and metadata discovery (title, artist, channel, high-res thumbnail, duration).
-- **No Stream Extraction**: Audio streams are **never** extracted, ripped, or reverse-engineered from YouTube URLs, and YouTube streams are never fed into ExoPlayer.
-- **Compliant Handoff**: For YouTube discovery items (`AudioSourceProvider.YOUTUBE_METADATA`), tapping the item opens an informative compliant dialog with an **"Open in YouTube"** action, launching the official YouTube Android app (`vnd.youtube:<id>`) or official web browser player.
-- **Permitted & Local Playback**: The app includes a rich catalog of licensed/Creative Commons audio streams (Debussy, Chopin, Beethoven, Pachelbel, Vivaldi, Erik Satie) and scans user-owned local device audio files (`MediaStore`), ensuring complete out-of-the-box playback functionality.
-- **API Key Security**: Secrets are never hardcoded. API keys are loaded via `local.properties` / `BuildConfig` or configured dynamically via the user settings screen.
+Following popular modern open-source music players like **SimpMusic** and **InnerTune**, MyMusic now features an out-of-the-box streaming architecture:
+- **InnerTube Music Discovery Engine**: Queries YouTube Music's internal endpoints directly (`https://music.youtube.com/youtubei/v1/search`) using `WEB_REMIX` context. **No Google Cloud API key or account configuration is required.**
+- **Instant Playback**: Tapping any song in Search, Home, Playlists, or Library immediately begins playback in the app without roadblock dialogs or redirects.
+- **Multi-Tier Stream Resolution Engine**:
+  1. *Tier 1 (NewPipeExtractor)*: High-performance stream extractor with signature deciphering and throttling deobfuscation.
+  2. *Tier 2 (High-Speed Fallback)*: Public Invidious and Piped stream endpoints.
+  3. *Tier 3 (Local/Sample Resiliency)*: Fallback permitted audio ensuring playback never fails or terminates with an unhandled exception.
+- **Crash-Proof Foreground Playback & Audio Effects**:
+  - Registered `music_playback_channel` with low importance on app and service startup.
+  - Media3 `DefaultMediaNotificationProvider` bound with custom small icon `ic_music_note` and valid channel.
+  - Defensive audio effect attachment (`AudioEffectController`) ensuring emulator and device hardware quirks do not crash the app.
+  - Compose `Slider` range coercion preventing `IllegalArgumentException` on dynamic tracks.
+  - Network-resilient `OkHttpDataSource.Factory` for seamless HTTPS streaming.
 
 ---
 
@@ -96,7 +103,8 @@ com.tharun.mymusic
 │   ├── remote
 │   │   ├── discovery    # SampleDiscoveryProvider, YouTubeDiscoveryProvider, LocalDeviceDiscoveryProvider
 │   │   ├── sample       # SamplePermittedCatalog (Licensed Creative Commons tracks + LRC lyrics)
-│   │   └── youtube      # YouTubeApiService (Retrofit), DTOs (Kotlinx Serialization)
+│   │   ├── stream       # OkHttpDownloader, YouTubeStreamResolver (NewPipeExtractor + Invidious fallback)
+│   │   └── youtube      # YouTubeMusicInnerTubeClient, YouTubeApiService, DTOs
 │   └── repository       # Repository Implementations
 ├── domain
 │   ├── model            # Immutable domain models (Song, Album, Artist, Playlist, Lyrics, PlaybackState, EqualizerConfig)

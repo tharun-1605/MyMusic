@@ -201,13 +201,13 @@ fun SettingsScreen(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         val keyStatus = when {
-                            state.youtubeApiKey.isNotBlank() -> "Configured (User Custom Key)"
-                            state.hasBuildConfigKey -> "Configured (local.properties / BuildConfig)"
-                            else -> "Not configured (Using Sample & Local Audio)"
+                            state.youtubeApiKey.isNotBlank() -> "Active (InnerTube + Custom Key configured)"
+                            state.hasBuildConfigKey -> "Active (InnerTube + BuildConfig Key)"
+                            else -> "Active (SimpMusic InnerTube Engine — No API key needed)"
                         }
 
                         SettingsNavigationRow(
-                            title = "YouTube Data API v3 Key",
+                            title = "YouTube Music Engine",
                             subtitle = keyStatus,
                             icon = Icons.Default.Key,
                             onClick = {

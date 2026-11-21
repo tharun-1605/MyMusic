@@ -70,32 +70,6 @@ fun SearchScreen(
     val resultState by viewModel.searchResultState.collectAsState()
     val recentSearches by viewModel.recentSearches.collectAsState()
 
-    val context = LocalContext.current
-    var youtubeHandoffSong by remember { mutableStateOf<Song?>(null) }
-
-    youtubeHandoffSong?.let { song ->
-        CompliantYouTubeDialog(
-            song = song,
-            onDismiss = { youtubeHandoffSong = null },
-            onOpenOfficialApp = {
-                val videoId = song.youtubeVideoId
-                if (videoId != null) {
-                    val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse("vnd.youtube:$videoId")).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    }
-                    val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$videoId")).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    }
-                    try {
-                        context.startActivity(appIntent)
-                    } catch (_: Exception) {
-                        context.startActivity(webIntent)
-                    }
-                }
-            }
-        )
-    }
-
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -269,11 +243,7 @@ fun SearchScreen(
                                 song = song,
                                 isPlaying = false,
                                 onSongClick = {
-                                    if (song.isPlayable) {
-                                        viewModel.playSong(song, filteredSongs)
-                                    } else {
-                                        youtubeHandoffSong = song
-                                    }
+                                    viewModel.playSong(song, filteredSongs)
                                 },
                                 onFavoriteToggle = { viewModel.toggleFavorite(song) }
                             )

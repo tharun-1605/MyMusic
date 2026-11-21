@@ -74,31 +74,6 @@ fun HomeScreen(
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.uiState.collectAsState()
-    val context = LocalContext.current
-    var youtubeHandoffSong by remember { mutableStateOf<Song?>(null) }
-
-    youtubeHandoffSong?.let { song ->
-        CompliantYouTubeDialog(
-            song = song,
-            onDismiss = { youtubeHandoffSong = null },
-            onOpenOfficialApp = {
-                val videoId = song.youtubeVideoId
-                if (videoId != null) {
-                    val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse("vnd.youtube:$videoId")).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    }
-                    val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$videoId")).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    }
-                    try {
-                        context.startActivity(appIntent)
-                    } catch (_: Exception) {
-                        context.startActivity(webIntent)
-                    }
-                }
-            }
-        )
-    }
 
     Box(
         modifier = modifier
@@ -204,11 +179,7 @@ fun HomeScreen(
                                 song = song,
                                 isPlaying = false,
                                 onSongClick = {
-                                    if (song.isPlayable) {
-                                        viewModel.playSong(song, data.recentlyPlayed)
-                                    } else {
-                                        youtubeHandoffSong = song
-                                    }
+                                    viewModel.playSong(song, data.recentlyPlayed)
                                 },
                                 onFavoriteToggle = { viewModel.toggleFavorite(song) },
                                 modifier = Modifier.padding(horizontal = 12.dp)
@@ -240,11 +211,7 @@ fun HomeScreen(
                             song = song,
                             isPlaying = false,
                             onSongClick = {
-                                if (song.isPlayable) {
-                                    viewModel.playSong(song, data.discoverSongs)
-                                } else {
-                                    youtubeHandoffSong = song
-                                }
+                                viewModel.playSong(song, data.discoverSongs)
                             },
                             onFavoriteToggle = { viewModel.toggleFavorite(song) },
                             modifier = Modifier.padding(horizontal = 12.dp)

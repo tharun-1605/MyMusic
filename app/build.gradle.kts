@@ -108,6 +108,10 @@ dependencies {
     implementation("androidx.media3:media3-session:$media3Version")
     implementation("androidx.media3:media3-ui:$media3Version")
     implementation("androidx.media3:media3-common:$media3Version")
+    implementation("androidx.media3:media3-datasource-okhttp:$media3Version")
+
+    // NewPipeExtractor for YouTube stream extraction without API key
+    implementation("com.github.teamnewpipe.NewPipeExtractor:extractor:v0.24.4")
 
     // Room Database
     val roomVersion = "2.6.1"

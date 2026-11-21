@@ -60,13 +60,14 @@ class SampleDiscoveryProvider @Inject constructor() : MusicDiscoveryProvider {
 @Singleton
 class YouTubeDiscoveryProvider @Inject constructor(
     private val youTubeApiService: YouTubeApiService,
-    private val preferencesDataStore: UserPreferencesDataStore
+    private val preferencesDataStore: UserPreferencesDataStore,
+    private val innerTubeClient: com.tharun.mymusic.data.remote.youtube.YouTubeMusicInnerTubeClient
 ) : MusicDiscoveryProvider {
 
-    override val providerName: String = "YouTube Music Discovery"
+    override val providerName: String = "YouTube Music (InnerTube / SimpMusic)"
 
     override val isConfigured: Boolean
-        get() = true // Checked dynamically via key check
+        get() = true
 
     private suspend fun getEffectiveApiKey(): String {
         val userKey = preferencesDataStore.youtubeApiKey.first()
@@ -78,10 +79,16 @@ class YouTubeDiscoveryProvider @Inject constructor(
     }
 
     override suspend fun search(query: String): SearchResult {
+        // First try InnerTube directly without requiring any API key (SimpMusic architecture)
+        val innerTubeResults = innerTubeClient.search(query)
+        if (innerTubeResults.songs.isNotEmpty()) {
+            return innerTubeResults
+        }
+
+        // Optional fallback to YouTube Data API v3 if API key is supplied
         val apiKey = getEffectiveApiKey()
         if (apiKey.isBlank()) {
-            // Graceful fallback when YouTube API key is not configured
-            return SearchResult(query = query)
+            return innerTubeResults
         }
 
         return try {
@@ -120,9 +127,9 @@ class YouTubeDiscoveryProvider @Inject constructor(
                     artist = snippet.channelTitle,
                     album = "YouTube Music",
                     artworkUri = artwork,
-                    mediaUri = null, // Protected: YouTube audio streams must not be extracted
+                    mediaUri = null,
                     durationMs = durationMap[videoId] ?: 0L,
-                    isPlayable = false, // Metadata discovery only; compliant handoff provided
+                    isPlayable = true,
                     provider = AudioSourceProvider.YOUTUBE_METADATA,
                     youtubeVideoId = videoId
                 )
@@ -138,13 +145,17 @@ class YouTubeDiscoveryProvider @Inject constructor(
                 albums = emptyList(),
                 query = query
             )
-        } catch (e: Exception) {
-            // Network, quota or invalid key errors handled gracefully
-            SearchResult(query = query)
+        } catch (_: Exception) {
+            innerTubeResults
         }
     }
 
     override suspend fun getTrending(): List<Song> {
+        val innerTubeTrending = innerTubeClient.getTrending()
+        if (innerTubeTrending.isNotEmpty()) {
+            return innerTubeTrending
+        }
+
         val apiKey = getEffectiveApiKey()
         if (apiKey.isBlank()) return emptyList()
 
@@ -161,11 +172,11 @@ class YouTubeDiscoveryProvider @Inject constructor(
                     id = "yt_$videoId",
                     title = snippet.title.replace("&quot;", "\"").replace("&#39;", "'").replace("&amp;", "&"),
                     artist = snippet.channelTitle,
-                    album = "Trending on YouTube",
+                    album = "YouTube Music",
                     artworkUri = snippet.thumbnails?.high?.url ?: snippet.thumbnails?.medium?.url,
                     mediaUri = null,
                     durationMs = 0L,
-                    isPlayable = false,
+                    isPlayable = true,
                     provider = AudioSourceProvider.YOUTUBE_METADATA,
                     youtubeVideoId = videoId
                 )

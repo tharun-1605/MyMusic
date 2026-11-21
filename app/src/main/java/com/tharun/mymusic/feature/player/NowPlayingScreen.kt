@@ -211,8 +211,11 @@ fun NowPlayingScreen(
 
         // Progress Slider & Timestamps
         Column(modifier = Modifier.fillMaxWidth()) {
+            val maxRange = (if (totalDuration > 0L) totalDuration.toFloat() else 1f).coerceAtLeast(1f)
+            val sliderValue = currentPosition.toFloat().coerceIn(0f, maxRange)
+
             Slider(
-                value = if (totalDuration > 0) currentPosition.toFloat() else 0f,
+                value = sliderValue,
                 onValueChange = {
                     isUserSeeking = true
                     seekPositionSlider = it
@@ -221,7 +224,7 @@ fun NowPlayingScreen(
                     viewModel.seekTo(seekPositionSlider.toLong())
                     isUserSeeking = false
                 },
-                valueRange = 0f..(if (totalDuration > 0) totalDuration.toFloat() else 1f),
+                valueRange = 0f..maxRange,
                 colors = SliderDefaults.colors(
                     thumbColor = AccentPrimary,
                     activeTrackColor = AccentPrimary,
