@@ -12,8 +12,11 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.tharun.mymusic.core.dispatchers.DispatcherProvider
+import com.tharun.mymusic.data.local.dao.SongDao
+import com.tharun.mymusic.data.local.entity.SongEntity
 import com.tharun.mymusic.data.remote.sample.SamplePermittedCatalog
 import com.tharun.mymusic.data.remote.stream.YouTubeStreamResolver
+import com.tharun.mymusic.data.remote.youtube.YouTubeMusicInnerTubeClient
 import com.tharun.mymusic.domain.model.AudioSourceProvider
 import com.tharun.mymusic.domain.model.PlaybackState
 import com.tharun.mymusic.domain.model.RepeatMode
@@ -39,13 +42,16 @@ import javax.inject.Singleton
 class PlaybackRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val dispatchers: DispatcherProvider,
-    private val streamResolver: YouTubeStreamResolver
+    private val streamResolver: YouTubeStreamResolver,
+    private val innerTubeClient: YouTubeMusicInnerTubeClient,
+    private val songDao: SongDao
 ) : PlaybackRepository {
 
     private val repositoryScope = CoroutineScope(dispatchers.main + Job())
     private var controller: MediaController? = null
     private var positionUpdateJob: Job? = null
     private var queuePreloadJob: Job? = null
+    private var autoplayJob: Job? = null
     private var pendingPlayRequest: (() -> Unit)? = null
 
     private val _playbackState = MutableStateFlow(PlaybackState())
@@ -86,6 +92,12 @@ class PlaybackRepositoryImpl @Inject constructor(
             override fun onPlaybackStateChanged(playbackState: Int) {
                 val isBuffering = playbackState == Player.STATE_BUFFERING
                 _playbackState.update { it.copy(isBuffering = isBuffering) }
+
+                // Autoplay when a song ends naturally (Spotify-like continuous autoplay)
+                if (playbackState == Player.STATE_ENDED) {
+                    next()
+                }
+
                 syncStateFromController()
             }
 
@@ -102,30 +114,21 @@ class PlaybackRepositoryImpl @Inject constructor(
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 val idx = controller?.currentMediaItemIndex ?: -1
                 if (idx in 0 until activeQueueSongs.size) {
-                    val s = activeQueueSongs[idx]
-                    val vId = s.youtubeVideoId?.takeIf { it.isNotBlank() }
-                        ?: if (s.id.startsWith("yt_")) s.id.removePrefix("yt_") else null
+                    val currentSong = activeQueueSongs[idx]
 
-                    // If the current transitioning song needs its respective direct stream resolved
-                    if (!vId.isNullOrBlank() && s.mediaUri?.contains("googlevideo.com") != true) {
-                        repositoryScope.launch(dispatchers.io) {
-                            val realStream = streamResolver.resolveAudioStream(vId)
-                            if (realStream.isNotBlank() && realStream != s.mediaUri) {
-                                val updatedSong = s.copy(mediaUri = realStream, isPlayable = true)
-                                activeQueueSongs[idx] = updatedSong
-                                withContext(dispatchers.main) {
-                                    val ctrl = controller
-                                    if (ctrl != null && ctrl.currentMediaItemIndex == idx) {
-                                        val pos = ctrl.currentPosition
-                                        val wasPlaying = ctrl.isPlaying
-                                        ctrl.replaceMediaItem(idx, updatedSong.toMediaItem())
-                                        ctrl.seekTo(idx, pos)
-                                        if (wasPlaying) ctrl.play()
-                                    }
-                                    syncStateFromController()
-                                }
-                            }
-                        }
+                    // Persist to database so recently played and recommendations update
+                    repositoryScope.launch(dispatchers.io) {
+                        try {
+                            songDao.insertSong(SongEntity.fromDomain(currentSong))
+                        } catch (_: Throwable) {}
+                    }
+
+                    // Preload the next upcoming track immediately
+                    preloadUpcomingTrack(idx + 1)
+
+                    // If approaching end of queue, fetch more related songs
+                    if (idx >= activeQueueSongs.size - 2) {
+                        fetchMoreRelatedSongs(currentSong)
                     }
                 }
                 syncStateFromController()
@@ -232,10 +235,15 @@ class PlaybackRepositoryImpl @Inject constructor(
         }
 
         queuePreloadJob?.cancel()
-        repositoryScope.launch(dispatchers.io) {
-            val resolvedSongs = songs.toMutableList()
+        autoplayJob?.cancel()
 
-            // 1. Resolve clicked target song's REAL audio stream first
+        repositoryScope.launch(dispatchers.io) {
+            // Persist target song to DB
+            try {
+                songDao.insertSong(SongEntity.fromDomain(targetSong))
+            } catch (_: Throwable) {}
+
+            // 1. Resolve clicked target song's REAL audio stream
             val targetVideoId = targetSong.youtubeVideoId?.takeIf { it.isNotBlank() }
                 ?: if (targetSong.id.startsWith("yt_")) targetSong.id.removePrefix("yt_") else null
 
@@ -246,33 +254,17 @@ class PlaybackRepositoryImpl @Inject constructor(
                     ?: streamResolver.getQuickAudioStream(targetSong.id)
             }
 
-            resolvedSongs[safeIndex] = targetSong.copy(
+            val resolvedTarget = targetSong.copy(
                 mediaUri = targetStreamUrl,
                 isPlayable = true
             )
 
-            // 2. Ensure each other queue item has a non-empty URI so MediaItem validation passes
-            for (i in resolvedSongs.indices) {
-                if (i == safeIndex) continue
-                val s = resolvedSongs[i]
-                if (s.mediaUri.isNullOrBlank()) {
-                    val vId = s.youtubeVideoId?.takeIf { it.isNotBlank() }
-                        ?: if (s.id.startsWith("yt_")) s.id.removePrefix("yt_") else null
-                    val cached = vId?.let { streamResolver.getCachedStream(it) }
-                    val streamUri = cached ?: if (s.id.startsWith("sample_")) {
-                        SamplePermittedCatalog.getAudioStreamForId(s.id)
-                    } else {
-                        streamResolver.getQuickAudioStream(vId ?: s.id)
-  .l///l                  }
-                    resolvedSongs[i] = s.copy(mediaUri = streamUri, isPlayable = true)
-                }
-            }
+            val resolvedSongs = songs.toMutableList()
+            resolvedSongs[safeIndex] = resolvedTarget
+            activeQueueSongs[safeIndex] = resolvedTarget
 
-            // 3. Immediately start playing the target song on the main thread
+            // 2. Play target song immediately on the controller
             withContext(dispatchers.main) {
-                activeQueueSongs.clear()
-                activeQueueSongs.addAll(resolvedSongs)
-
                 val c = controller ?: return@withContext
                 val mediaItems = resolvedSongs.map { it.toMediaItem() }
                 try {
@@ -286,33 +278,12 @@ class PlaybackRepositoryImpl @Inject constructor(
                 }
             }
 
-            // 4. Background queue preloader: asynchronously resolve upcoming tracks
-            // so every song in the queue has its own real respective audio stream!
-            queuePreloadJob = launch(dispatchers.io) {
-                val order = (safeIndex + 1 until resolvedSongs.size) + (0 until safeIndex)
-                for (idx in order) {
-                    if (!isActive) break
-                    val s = resolvedSongs.getOrNull(idx) ?: continue
-                    val vId = s.youtubeVideoId?.takeIf { it.isNotBlank() }
-                        ?: if (s.id.startsWith("yt_")) s.id.removePrefix("yt_") else null
+            // 3. Immediately pre-resolve the upcoming track (safeIndex + 1)
+            preloadUpcomingTrack(safeIndex + 1)
 
-                    if (!vId.isNullOrBlank() && s.mediaUri?.contains("googlevideo.com") != true) {
-                        try {
-                            val resolved = streamResolver.resolveAudioStream(vId)
-                            if (resolved.isNotBlank() && resolved != s.mediaUri) {
-                                resolvedSongs[idx] = s.copy(mediaUri = resolved, isPlayable = true)
-                                withContext(dispatchers.main) {
-                                    activeQueueSongs.clear()
-                                    activeQueueSongs.addAll(resolvedSongs)
-                                    val ctrl = controller
-                                    if (ctrl != null && idx < ctrl.mediaItemCount && idx != ctrl.currentMediaItemIndex) {
-                                        ctrl.replaceMediaItem(idx, resolvedSongs[idx].toMediaItem())
-                                    }
-                                }
-                            }
-                        } catch (_: Throwable) {}
-                    }
-b/                }
+            // 4. If queue is small (e.g. single song played from search/home), fetch related songs (Spotify-like Radio autoplay)
+            if (!targetVideoId.isNullOrBlank() && songs.size <= 2) {
+                fetchMoreRelatedSongs(resolvedTarget)
             }
         }
     }
@@ -334,26 +305,118 @@ b/                }
     }
 
     override fun next() {
-        try {
-            val c = controller ?: return
-            if (c.hasNextMediaItem()) {
-                c.seekToNextMediaItem()
+        val c = controller ?: return
+        val currentIdx = c.currentMediaItemIndex
+        val nextIdx = currentIdx + 1
+
+        if (nextIdx in 0 until activeQueueSongs.size) {
+            val nextSong = activeQueueSongs[nextIdx]
+            val vId = nextSong.youtubeVideoId?.takeIf { it.isNotBlank() }
+                ?: if (nextSong.id.startsWith("yt_")) nextSong.id.removePrefix("yt_") else null
+
+            _playbackState.update {
+                it.copy(currentSong = nextSong, isBuffering = true)
             }
-        } catch (e: Throwable) {
-            Log.e("PlaybackRepository", "Next failed", e)
+
+            repositoryScope.launch(dispatchers.io) {
+                val realStream = if (!vId.isNullOrBlank()) {
+                    streamResolver.resolveAudioStream(vId)
+                } else {
+                    nextSong.mediaUri?.takeIf { it.isNotBlank() } ?: streamResolver.getQuickAudioStream(nextSong.id)
+                }
+
+                val updatedNext = nextSong.copy(mediaUri = realStream, isPlayable = true)
+                activeQueueSongs[nextIdx] = updatedNext
+
+                try {
+                    songDao.insertSong(SongEntity.fromDomain(updatedNext))
+                } catch (_: Throwable) {}
+
+                withContext(dispatchers.main) {
+                    val ctrl = controller ?: return@withContext
+                    if (nextIdx < ctrl.mediaItemCount) {
+                        ctrl.replaceMediaItem(nextIdx, updatedNext.toMediaItem())
+                        ctrl.seekTo(nextIdx, 0L)
+                    } else {
+                        ctrl.addMediaItem(updatedNext.toMediaItem())
+                        ctrl.seekTo(nextIdx, 0L)
+                    }
+                    ctrl.play()
+                    syncStateFromController()
+                }
+
+                // Pre-resolve the track after this one (nextIdx + 1)
+                preloadUpcomingTrack(nextIdx + 1)
+
+                // If approaching queue end, fetch more related songs
+                if (nextIdx >= activeQueueSongs.size - 2) {
+                    fetchMoreRelatedSongs(updatedNext)
+                }
+            }
+        } else {
+            // End of queue reached: Autoplay related songs matching language, artist & theme!
+            val currentSong = activeQueueSongs.getOrNull(currentIdx)
+                ?: _playbackState.value.currentSong
+            if (currentSong != null) {
+                val vId = currentSong.youtubeVideoId?.takeIf { it.isNotBlank() }
+                    ?: if (currentSong.id.startsWith("yt_")) currentSong.id.removePrefix("yt_") else null
+
+                if (!vId.isNullOrBlank()) {
+                    _playbackState.update { it.copy(isBuffering = true) }
+                    repositoryScope.launch(dispatchers.io) {
+                        val related = innerTubeClient.getRelatedSongs(vId)
+                        if (related.isNotEmpty()) {
+                            appendAndPlayAutoplay(related)
+                        } else {
+                            withContext(dispatchers.main) {
+                                _playbackState.update { it.copy(isBuffering = false) }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
     override fun previous() {
-        try {
-            val c = controller ?: return
-            if (c.currentPosition > 3000L || !c.hasPreviousMediaItem()) {
-                c.seekTo(0L)
-            } else {
-                c.seekToPreviousMediaItem()
+        val c = controller ?: return
+        if (c.currentPosition > 3000L) {
+            c.seekTo(0L)
+            return
+        }
+
+        val currentIdx = c.currentMediaItemIndex
+        val prevIdx = currentIdx - 1
+        if (prevIdx in 0 until activeQueueSongs.size) {
+            val prevSong = activeQueueSongs[prevIdx]
+            val vId = prevSong.youtubeVideoId?.takeIf { it.isNotBlank() }
+                ?: if (prevSong.id.startsWith("yt_")) prevSong.id.removePrefix("yt_") else null
+
+            _playbackState.update {
+                it.copy(currentSong = prevSong, isBuffering = true)
             }
-        } catch (e: Throwable) {
-            Log.e("PlaybackRepository", "Previous failed", e)
+
+            repositoryScope.launch(dispatchers.io) {
+                val realStream = if (!vId.isNullOrBlank()) {
+                    streamResolver.resolveAudioStream(vId)
+                } else {
+                    prevSong.mediaUri?.takeIf { it.isNotBlank() } ?: streamResolver.getQuickAudioStream(prevSong.id)
+                }
+                val updatedPrev = prevSong.copy(mediaUri = realStream, isPlayable = true)
+                activeQueueSongs[prevIdx] = updatedPrev
+
+                withContext(dispatchers.main) {
+                    val ctrl = controller ?: return@withContext
+                    if (prevIdx < ctrl.mediaItemCount) {
+                        ctrl.replaceMediaItem(prevIdx, updatedPrev.toMediaItem())
+                        ctrl.seekTo(prevIdx, 0L)
+                    }
+                    ctrl.play()
+                    syncStateFromController()
+                }
+            }
+        } else {
+            c.seekTo(0L)
         }
     }
 
@@ -394,7 +457,9 @@ b/                }
             val c = controller ?: return
             if (index in 0 until activeQueueSongs.size) {
                 activeQueueSongs.removeAt(index)
-                c.removeMediaItem(index)
+                if (index < c.mediaItemCount) {
+                    c.removeMediaItem(index)
+                }
                 syncStateFromController()
             }
         } catch (e: Throwable) {
@@ -408,7 +473,9 @@ b/                }
             if (fromIndex in 0 until activeQueueSongs.size && toIndex in 0 until activeQueueSongs.size) {
                 val item = activeQueueSongs.removeAt(fromIndex)
                 activeQueueSongs.add(toIndex, item)
-                c.moveMediaItem(fromIndex, toIndex)
+                if (fromIndex < c.mediaItemCount && toIndex < c.mediaItemCount) {
+                    c.moveMediaItem(fromIndex, toIndex)
+                }
                 syncStateFromController()
             }
         } catch (e: Throwable) {
@@ -429,10 +496,103 @@ b/                }
 
     override fun getAudioSessionId(): Int = 0
 
+    private fun preloadUpcomingTrack(index: Int) {
+        if (index !in 0 until activeQueueSongs.size) return
+        val s = activeQueueSongs[index]
+        val vId = s.youtubeVideoId?.takeIf { it.isNotBlank() }
+            ?: if (s.id.startsWith("yt_")) s.id.removePrefix("yt_") else null
+
+        if (!vId.isNullOrBlank() && s.mediaUri?.contains("googlevideo.com") != true) {
+            repositoryScope.launch(dispatchers.io) {
+                try {
+                    val resolved = streamResolver.resolveAudioStream(vId)
+                    if (resolved.isNotBlank() && resolved != s.mediaUri) {
+                        val updated = s.copy(mediaUri = resolved, isPlayable = true)
+                        activeQueueSongs[index] = updated
+                        withContext(dispatchers.main) {
+                            val ctrl = controller
+                            if (ctrl != null && index < ctrl.mediaItemCount && index != ctrl.currentMediaItemIndex) {
+                                ctrl.replaceMediaItem(index, updated.toMediaItem())
+                            }
+                        }
+                    }
+                } catch (_: Throwable) {}
+            }
+        }
+    }
+
+    private fun fetchMoreRelatedSongs(seedSong: Song) {
+        val vId = seedSong.youtubeVideoId?.takeIf { it.isNotBlank() }
+            ?: if (seedSong.id.startsWith("yt_")) seedSong.id.removePrefix("yt_") else null
+        if (vId.isNullOrBlank()) return
+
+        autoplayJob?.cancel()
+        autoplayJob = repositoryScope.launch(dispatchers.io) {
+            try {
+                val related = innerTubeClient.getRelatedSongs(vId)
+                if (related.isNotEmpty()) {
+                    val existingIds = activeQueueSongs.map { it.id }.toSet()
+                    val newTracks = related.filter { !existingIds.contains(it.id) }
+                    if (newTracks.isNotEmpty()) {
+                        activeQueueSongs.addAll(newTracks)
+                        withContext(dispatchers.main) {
+                            val ctrl = controller
+                            if (ctrl != null) {
+                                ctrl.addMediaItems(newTracks.map { it.toMediaItem() })
+                            }
+                            _playbackState.update { it.copy(queue = activeQueueSongs.toList()) }
+                        }
+                    }
+                }
+            } catch (_: Throwable) {}
+        }
+    }
+
+    private suspend fun appendAndPlayAutoplay(related: List<Song>) {
+        val existingIds = activeQueueSongs.map { it.id }.toSet()
+        val newTracks = related.filter { !existingIds.contains(it.id) }
+        if (newTracks.isEmpty()) return
+
+        val firstNew = newTracks.first()
+        val vId = firstNew.youtubeVideoId?.takeIf { it.isNotBlank() }
+            ?: if (firstNew.id.startsWith("yt_")) firstNew.id.removePrefix("yt_") else null
+
+        val realStream = if (!vId.isNullOrBlank()) {
+            streamResolver.resolveAudioStream(vId)
+        } else {
+            firstNew.mediaUri ?: streamResolver.getQuickAudioStream(firstNew.id)
+        }
+
+        val resolvedFirst = firstNew.copy(mediaUri = realStream, isPlayable = true)
+        val playIndex = activeQueueSongs.size
+        activeQueueSongs.addAll(listOf(resolvedFirst) + newTracks.drop(1))
+
+        try {
+            songDao.insertSong(SongEntity.fromDomain(resolvedFirst))
+        } catch (_: Throwable) {}
+
+        withContext(dispatchers.main) {
+            val ctrl = controller ?: return@withContext
+            ctrl.addMediaItems(listOf(resolvedFirst.toMediaItem()) + newTracks.drop(1).map { it.toMediaItem() })
+            ctrl.seekTo(playIndex, 0L)
+            ctrl.play()
+            syncStateFromController()
+        }
+
+        // Preload next upcoming related track
+        preloadUpcomingTrack(playIndex + 1)
+    }
+
     private fun Song.toMediaItem(): MediaItem {
-        val parsedUri = if (!mediaUri.isNullOrBlank()) {
-            try { Uri.parse(mediaUri) } catch (_: Throwable) { null }
-        } else null
+        val uriStr = if (!mediaUri.isNullOrBlank()) {
+            mediaUri
+        } else {
+            val vId = youtubeVideoId?.takeIf { it.isNotBlank() }
+                ?: if (id.startsWith("yt_")) id.removePrefix("yt_") else null
+            vId?.let { streamResolver.getCachedStream(it) } ?: streamResolver.getQuickAudioStream(id)
+        }
+
+        val parsedUri = try { Uri.parse(uriStr) } catch (_: Throwable) { Uri.parse(SamplePermittedCatalog.DEFAULT_FALLBACK_AUDIO) }
 
         val artUri = artworkUri?.takeIf { it.isNotBlank() }?.let {
             try { Uri.parse(it) } catch (_: Throwable) { null }
@@ -449,22 +609,19 @@ b/                }
             .setMediaUri(parsedUri)
             .build()
 
-        val builder = MediaItem.Builder()
+        return MediaItem.Builder()
             .setMediaId(id)
             .setMediaMetadata(metadata)
+            .setUri(parsedUri)
             .setRequestMetadata(reqMetadata)
-
-        if (parsedUri != null) {
-            builder.setUri(parsedUri)
-        }
-
-        return builder.build()
+            .build()
     }
 
     private fun songFromMediaItem(item: MediaItem): Song {
         val meta = item.mediaMetadata
         val uriStr = item.requestMetadata.mediaUri?.toString()
             ?: item.localConfiguration?.uri?.toString()
+        val vId = if (item.mediaId.startsWith("yt_")) item.mediaId.removePrefix("yt_") else null
         return Song(
             id = item.mediaId,
             title = meta.title?.toString() ?: "Unknown Track",
@@ -474,7 +631,8 @@ b/                }
             mediaUri = uriStr,
             durationMs = 0L,
             isPlayable = true,
-            provider = AudioSourceProvider.SAMPLE
+            provider = if (vId != null) AudioSourceProvider.YOUTUBE_METADATA else AudioSourceProvider.SAMPLE,
+            youtubeVideoId = vId
         )
     }
 }

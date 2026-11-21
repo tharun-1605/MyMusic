@@ -62,6 +62,7 @@ interface LyricsRepository {
 interface MusicDiscoveryRepository {
     fun search(query: String): Flow<Resource<SearchResult>>
     fun getTrendingSongs(): Flow<Resource<List<Song>>>
+    fun getRelatedSongs(videoId: String): Flow<List<Song>>
     fun getFeaturedPlaylists(): Flow<Resource<List<Playlist>>>
 }
 

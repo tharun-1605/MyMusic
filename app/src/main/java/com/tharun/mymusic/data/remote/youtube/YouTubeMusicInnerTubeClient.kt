@@ -23,7 +23,10 @@ class YouTubeMusicInnerTubeClient @Inject constructor(
 ) {
     companion object {
         private const val SEARCH_URL = "https://music.youtube.com/youtubei/v1/search"
+        private const val NEXT_URL = "https://music.youtube.com/youtubei/v1/next"
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
+        private const val SONGS_ONLY_PARAMS = "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D"
+        private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
 
     suspend fun search(query: String): SearchResult = withContext(dispatchers.io) {
@@ -41,12 +44,13 @@ class YouTubeMusicInnerTubeClient @Inject constructor(
                     })
                 })
                 put("query", q)
+                put("params", SONGS_ONLY_PARAMS) // Filter strictly for SONGS ONLY
             }
 
             val request = Request.Builder()
                 .url(SEARCH_URL)
                 .post(payload.toString().toRequestBody(JSON_MEDIA_TYPE))
-                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                .header("User-Agent", USER_AGENT)
                 .header("Referer", "https://music.youtube.com/")
                 .build()
 
@@ -67,7 +71,7 @@ class YouTubeMusicInnerTubeClient @Inject constructor(
         try {
             val res = search("Top Music Hits")
             res.songs.ifEmpty {
-                val res2 = search("Trending Music Hits 2026")
+                val res2 = search("Trending Music Hits")
                 res2.songs.ifEmpty {
                     search("Popular Music Hits").songs
                 }
@@ -75,6 +79,118 @@ class YouTubeMusicInnerTubeClient @Inject constructor(
         } catch (e: Exception) {
             emptyList()
         }
+    }
+
+    suspend fun getRelatedSongs(videoId: String): List<Song> = withContext(dispatchers.io) {
+        val cleanId = videoId.trim().removePrefix("yt_")
+        if (cleanId.isBlank()) return@withContext emptyList()
+
+        try {
+            val payload = JSONObject().apply {
+                put("context", JSONObject().apply {
+                    put("client", JSONObject().apply {
+                        put("clientName", "WEB_REMIX")
+                        put("clientVersion", "1.20240101.01.00")
+                        put("hl", "en")
+                        put("gl", "US")
+                    })
+                })
+                put("videoId", cleanId)
+                put("playlistId", "RDAMVM$cleanId")
+                put("isAudioOnly", true)
+            }
+
+            val request = Request.Builder()
+                .url(NEXT_URL)
+                .post(payload.toString().toRequestBody(JSON_MEDIA_TYPE))
+                .header("User-Agent", USER_AGENT)
+                .header("Referer", "https://music.youtube.com/")
+                .build()
+
+            val response = okHttpClient.newCall(request).execute()
+            if (!response.isSuccessful) return@withContext emptyList()
+
+            val responseBody = response.body?.string() ?: return@withContext emptyList()
+            parseRelatedSongs(responseBody, cleanId)
+        } catch (e: Exception) {
+            Log.e("InnerTubeClient", "Error fetching related songs for $videoId", e)
+            emptyList()
+        }
+    }
+
+    private fun parseRelatedSongs(jsonStr: String, seedVideoId: String): List<Song> {
+        val songs = mutableListOf<Song>()
+        try {
+            val root = JSONObject(jsonStr)
+            val tabs = root.optJSONObject("contents")
+                ?.optJSONObject("singleColumnMusicWatchNextResultsRenderer")
+                ?.optJSONObject("tabbedRenderer")
+                ?.optJSONObject("watchNextTabbedResultsRenderer")
+                ?.optJSONArray("tabs") ?: return emptyList()
+
+            for (t in 0 until tabs.length()) {
+                val tab = tabs.getJSONObject(t).optJSONObject("tabRenderer") ?: continue
+                val queueRenderer = tab.optJSONObject("content")?.optJSONObject("musicQueueRenderer") ?: continue
+                val items = queueRenderer.optJSONObject("content")
+                    ?.optJSONObject("playlistPanelRenderer")
+                    ?.optJSONArray("contents") ?: continue
+
+                for (i in 0 until items.length()) {
+                    val renderer = items.getJSONObject(i).optJSONObject("playlistPanelVideoRenderer") ?: continue
+                    val vId = renderer.optString("videoId")
+                    if (vId.isNullOrBlank() || vId == seedVideoId) continue
+
+                    val titleRuns = renderer.optJSONObject("title")?.optJSONArray("runs")
+                    val title = if (titleRuns != null && titleRuns.length() > 0) {
+                        val sb = StringBuilder()
+                        for (r in 0 until titleRuns.length()) {
+                            sb.append(titleRuns.getJSONObject(r).optString("text"))
+                        }
+                        sb.toString().trim()
+                    } else "Unknown Title"
+
+                    val artistRuns = renderer.optJSONObject("shortBylineText")?.optJSONArray("runs")
+                        ?: renderer.optJSONObject("longBylineText")?.optJSONArray("runs")
+                    val artist = if (artistRuns != null && artistRuns.length() > 0) {
+                        val sb = StringBuilder()
+                        for (r in 0 until artistRuns.length()) {
+                            sb.append(artistRuns.getJSONObject(r).optString("text"))
+                        }
+                        sb.toString().trim()
+                    } else "YouTube Music"
+
+                    val lengthStr = renderer.optJSONObject("lengthText")
+                        ?.optJSONArray("runs")
+                        ?.optJSONObject(0)
+                        ?.optString("text") ?: ""
+                    val durationMs = parseDuration(lengthStr)
+
+                    val thumbs = renderer.optJSONObject("thumbnail")?.optJSONArray("thumbnails")
+                    val artworkUri = if (thumbs != null && thumbs.length() > 0) {
+                        thumbs.getJSONObject(thumbs.length() - 1).optString("url")
+                    } else null
+
+                    val cleanTitle = title.replace("&quot;", "\"").replace("&#39;", "'").replace("&amp;", "&")
+                    songs.add(
+                        Song(
+                            id = "yt_$vId",
+                            title = cleanTitle,
+                            artist = artist,
+                            album = "YouTube Music",
+                            artworkUri = artworkUri,
+                            mediaUri = null,
+                            durationMs = durationMs,
+                            isPlayable = true,
+                            provider = AudioSourceProvider.YOUTUBE_METADATA,
+                            youtubeVideoId = vId
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("InnerTubeClient", "Error parsing related songs", e)
+        }
+        return songs.distinctBy { it.id }
     }
 
     private fun parseSearchResult(jsonStr: String, query: String): SearchResult {
@@ -97,6 +213,15 @@ class YouTubeMusicInnerTubeClient @Inject constructor(
                 val sec = sections.getJSONObject(s)
                 val items = mutableListOf<JSONObject>()
 
+                if (sec.has("musicShelfRenderer")) {
+                    val shelf = sec.getJSONObject("musicShelfRenderer")
+                    val shelfItems = shelf.optJSONArray("contents")
+                    if (shelfItems != null) {
+                        for (j in 0 until shelfItems.length()) {
+                            items.add(shelfItems.getJSONObject(j))
+                        }
+                    }
+                }
                 if (sec.has("musicCardShelfRenderer")) {
                     val cardShelf = sec.getJSONObject("musicCardShelfRenderer")
                     val contents = cardShelf.optJSONArray("contents")
@@ -196,7 +321,8 @@ class YouTubeMusicInnerTubeClient @Inject constructor(
                             } else null
                         }
 
-                    if (!videoId.isNullOrBlank()) {
+                    // Exclude non-songs or excessively long items (> 20 min)
+                    if (!videoId.isNullOrBlank() && durationMs <= 1200000L) {
                         val cleanTitle = title.replace("&quot;", "\"").replace("&#39;", "'").replace("&amp;", "&")
                         songs.add(
                             Song(

@@ -24,6 +24,7 @@ interface MusicDiscoveryProvider {
     val isConfigured: Boolean
     suspend fun search(query: String): SearchResult
     suspend fun getTrending(): List<Song>
+    suspend fun getRelated(videoId: String): List<Song>
 }
 
 @Singleton
@@ -54,6 +55,10 @@ class SampleDiscoveryProvider @Inject constructor() : MusicDiscoveryProvider {
 
     override suspend fun getTrending(): List<Song> {
         return SamplePermittedCatalog.sampleSongs
+    }
+
+    override suspend fun getRelated(videoId: String): List<Song> {
+        return SamplePermittedCatalog.sampleSongs.filter { it.id != videoId }
     }
 }
 
@@ -161,7 +166,7 @@ class YouTubeDiscoveryProvider @Inject constructor(
 
         return try {
             val response = youTubeApiService.searchMusic(
-                query = "Top Music Hits 2026",
+                query = "Top Music Hits",
                 maxResults = 10,
                 apiKey = apiKey
             )
@@ -184,6 +189,10 @@ class YouTubeDiscoveryProvider @Inject constructor(
         } catch (_: Exception) {
             emptyList()
         }
+    }
+
+    override suspend fun getRelated(videoId: String): List<Song> {
+        return innerTubeClient.getRelatedSongs(videoId)
     }
 }
 

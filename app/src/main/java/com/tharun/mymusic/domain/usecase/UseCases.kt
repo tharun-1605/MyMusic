@@ -20,7 +20,8 @@ data class HomeData(
     val recentlyPlayed: List<Song>,
     val discoverSongs: List<Song>,
     val featuredPlaylists: List<Playlist>,
-    val favoriteSongs: List<Song>
+    val favoriteSongs: List<Song>,
+    val recommendationsTitle: String = "Recommended for you"
 )
 
 class GetHomeDataUseCase @Inject constructor(
@@ -45,12 +46,14 @@ class GetHomeDataUseCase @Inject constructor(
         ) { recent, trendingRes, playlistsRes, favorites ->
             val trending = if (trendingRes is Resource.Success) trendingRes.data else emptyList()
             val playlists = if (playlistsRes is Resource.Success) playlistsRes.data else emptyList()
+            val title = if (recent.isNotEmpty()) "Recommended for you" else "Discover Songs"
             HomeData(
                 greeting = greeting,
                 recentlyPlayed = recent,
                 discoverSongs = trending,
                 featuredPlaylists = playlists,
-                favoriteSongs = favorites
+                favoriteSongs = favorites,
+                recommendationsTitle = title
             )
         }
     }

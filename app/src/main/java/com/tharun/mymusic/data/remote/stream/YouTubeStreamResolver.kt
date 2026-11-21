@@ -45,17 +45,31 @@ class YouTubeStreamResolver @Inject constructor(
         return idOrVideoId.trim().removePrefix("yt_")
     }
 
+    fun isStreamValid(streamUrl: String?): Boolean {
+        if (streamUrl.isNullOrBlank()) return false
+        return streamUrl.contains("googlevideo.com") ||
+                streamUrl.startsWith("content://") ||
+                streamUrl.startsWith("file://")
+    }
+
+    fun hasResolvedStream(idOrVideoId: String): Boolean {
+        val cleanId = cleanVideoId(idOrVideoId)
+        val cached = streamCache[cleanId]
+        return isStreamValid(cached)
+    }
+
     fun getQuickAudioStream(id: String): String {
         val cleanId = cleanVideoId(id)
-        streamCache[cleanId]?.let { return it }
-        val stream = SamplePermittedCatalog.getAudioStreamForId(cleanId)
-        streamCache[cleanId] = stream
-        return stream
+        val cached = streamCache[cleanId]
+        if (!cached.isNullOrBlank()) return cached
+        // Fallback without poisoning the cache with sample audio
+        return SamplePermittedCatalog.getAudioStreamForId(cleanId)
     }
 
     fun getCachedStream(idOrVideoId: String): String? {
         val cleanId = cleanVideoId(idOrVideoId)
-        return streamCache[cleanId]
+        val cached = streamCache[cleanId]
+        return if (!cached.isNullOrBlank()) cached else null
     }
 
     suspend fun resolveAudioStream(idOrVideoId: String): String = withContext(dispatchers.io) {

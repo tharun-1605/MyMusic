@@ -56,4 +56,46 @@ class StreamResolverTest {
         assertEquals("abc123XYZ", resolver.cleanVideoId("yt_abc123XYZ"))
         assertEquals("abc123XYZ", resolver.cleanVideoId("abc123XYZ"))
     }
+
+    @Test
+    fun testQuickAudioStreamDoesNotPoisonStreamCache() {
+        val client = OkHttpClient()
+        val downloader = OkHttpDownloader(client)
+        val resolver = YouTubeStreamResolver(downloader, client, testDispatchers)
+        val quickStream = resolver.getQuickAudioStream("unresolvedVideo123")
+        assertNotNull(quickStream)
+        // Quick fallback MUST NOT mark the video as resolved in the cache!
+        org.junit.Assert.assertFalse(
+            "Quick fallback must not poison the stream cache",
+            resolver.hasResolvedStream("unresolvedVideo123")
+        )
+    }
+
+    @Test
+    fun testInnerTubeRelatedSongsFetchesRelatedTracks() = runBlocking {
+        val client = OkHttpClient()
+        val innerTubeClient = com.tharun.mymusic.data.remote.youtube.YouTubeMusicInnerTubeClient(client, testDispatchers)
+        // Despacito video ID
+        val related = innerTubeClient.getRelatedSongs("kJQP7kiw5Fk")
+        assertNotNull(related)
+        assertTrue("Related songs radio should return at least 5 songs", related.size >= 5)
+        val firstRelated = related.first()
+        assertTrue("Related track has non-empty title", firstRelated.title.isNotBlank())
+        assertTrue("Related track has non-empty artist", firstRelated.artist.isNotBlank())
+        assertTrue("Related track has valid video ID", firstRelated.id.isNotBlank())
+    }
+
+    @Test
+    fun testInnerTubeSearchSongsOnlyFilter() = runBlocking {
+        val client = OkHttpClient()
+        val innerTubeClient = com.tharun.mymusic.data.remote.youtube.YouTubeMusicInnerTubeClient(client, testDispatchers)
+        val results = innerTubeClient.search("A.R. Rahman")
+        assertNotNull(results)
+        assertTrue("Search should find songs", results.songs.isNotEmpty())
+        // Verified strictly songs only - no videos > 20 mins
+        assertTrue(
+            "All results must be songs under 20 mins",
+            results.songs.all { it.durationMs <= 20 * 60 * 1000L }
+        )
+    }
 }

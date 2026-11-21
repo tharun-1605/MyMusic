@@ -37,6 +37,7 @@ import com.tharun.mymusic.domain.repository.SongRepository
 import com.tharun.mymusic.domain.repository.UserPreferencesRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -316,6 +317,7 @@ class MusicDiscoveryRepositoryImpl @Inject constructor(
     private val youTubeDiscoveryProvider: YouTubeDiscoveryProvider,
     private val songRepository: SongRepository,
     private val playlistRepository: PlaylistRepository,
+    private val recentlyPlayedDao: RecentlyPlayedDao,
     private val dispatchers: DispatcherProvider
 ) : MusicDiscoveryRepository {
 
@@ -328,14 +330,14 @@ class MusicDiscoveryRepositoryImpl @Inject constructor(
                 return@flow
             }
 
-            // 1. Search sample catalog
-            val sampleResults = sampleDiscoveryProvider.search(q)
+            // 1. Search YouTube first (InnerTube / SimpMusic architecture - Songs only)
+            val ytResults = youTubeDiscoveryProvider.search(q)
 
             // 2. Search local database
             val localSongs = songRepository.searchLocal(q)
 
-            // 3. Search YouTube Data API if configured
-            val ytResults = youTubeDiscoveryProvider.search(q)
+            // 3. Search sample catalog
+            val sampleResults = sampleDiscoveryProvider.search(q)
 
             val combinedSongs = (ytResults.songs + localSongs + sampleResults.songs).distinctBy { it.id }
             val combinedArtists = (ytResults.artists + sampleResults.artists).distinctBy { it.name }
@@ -359,6 +361,33 @@ class MusicDiscoveryRepositoryImpl @Inject constructor(
     override fun getTrendingSongs(): Flow<Resource<List<Song>>> = flow {
         emit(Resource.Loading)
         try {
+            // Check if user has recently played songs to personalize recommendations based on their listening
+            val recent: List<SongEntity> = try {
+                recentlyPlayedDao.getRecentlyPlayed(5).first()
+            } catch (_: Exception) {
+                emptyList()
+            }
+
+            if (recent.isNotEmpty()) {
+                val seed = recent.firstOrNull { it.id.startsWith("yt_") || it.youtubeVideoId != null }
+                val vId = seed?.youtubeVideoId ?: seed?.id?.removePrefix("yt_")
+                if (!vId.isNullOrBlank()) {
+                    val related = youTubeDiscoveryProvider.getRelated(vId)
+                    if (related.isNotEmpty()) {
+                        emit(Resource.Success(related))
+                        return@flow
+                    }
+                }
+                val artist = recent.first().artist
+                if (artist.isNotBlank() && artist != "Unknown Artist") {
+                    val artistResults = youTubeDiscoveryProvider.search(artist)
+                    if (artistResults.songs.isNotEmpty()) {
+                        emit(Resource.Success(artistResults.songs))
+                        return@flow
+                    }
+                }
+            }
+
             val ytTrending = youTubeDiscoveryProvider.getTrending()
             val sampleTrending = sampleDiscoveryProvider.getTrending()
             val combined = if (ytTrending.isNotEmpty()) {
@@ -369,6 +398,15 @@ class MusicDiscoveryRepositoryImpl @Inject constructor(
             emit(Resource.Success(combined))
         } catch (e: Exception) {
             emit(Resource.Success(sampleDiscoveryProvider.getTrending()))
+        }
+    }.flowOn(dispatchers.io)
+
+    override fun getRelatedSongs(videoId: String): Flow<List<Song>> = flow {
+        try {
+            val related = youTubeDiscoveryProvider.getRelated(videoId)
+            emit(related)
+        } catch (_: Exception) {
+            emit(emptyList())
         }
     }.flowOn(dispatchers.io)
 
